@@ -67,7 +67,22 @@ for f in "$ROOT"/backend/migrations/*.sql; do
   "${PSQL[@]}" -1 -f "$f" || { echo "GAGAL: migrasi $(basename "$f")"; exit 1; }
 done
 
-pass=0; fail=0
+pass=0; fail=0; skip=0; failed_names=()
+
+# Menghitung baris PASS/FAIL/SKIP dari keluaran sebuah file tes; rc != 0 tanpa FAIL dihitung 1 kegagalan.
+tally() {
+  local label="$1" rc="$2" out="$3" p f s
+  p=$(printf '%s\n' "$out" | grep -c 'NOTICE:  PASS: \|^PASS: ')
+  f=$(printf '%s\n' "$out" | grep -c 'NOTICE:  FAIL: \|^FAIL: ')
+  s=$(printf '%s\n' "$out" | grep -c 'NOTICE:  SKIP: \|^SKIP: ')
+  printf '%s\n' "$out" | grep 'PASS: ' | sed 's/^/  /'
+  printf '%s\n' "$out" | grep 'FAIL: \|SKIP: \|CATATAN: ' | sed 's/^/  /'
+  pass=$((pass+p)); fail=$((fail+f)); skip=$((skip+s))
+  if [ "$rc" -ne 0 ]; then
+    fail=$((fail+1)); echo "  GAGAL (exit $rc) $label"
+    printf '%s\n' "$out" | grep -v 'PASS: \|SKIP: ' | sed 's/^/    /'
+  fi
+}
 
 echo "== Struktur: verify_schema.sql"
 while IFS='|' read -r name ok; do
@@ -75,18 +90,21 @@ while IFS='|' read -r name ok; do
   if [ "$ok" = t ]; then pass=$((pass+1)); echo "  ok   $name"; else fail=$((fail+1)); echo "  GAGAL $name"; fi
 done < <("$PG_BIN_DIR/psql" -X -q -At -F'|' -f "$HERE/verify_schema.sql")
 
-echo "== Tes runtime"
+echo "== Tes runtime (SQL, satu koneksi per file)"
 shopt -s nullglob
 for f in "$HERE"/runtime/*.sql; do
-  # Tiap file: ON_ERROR_STOP, exit non-nol berarti gagal. NOTICE 'PASS: ...' dihitung.
+  echo " -- $(basename "$f")"
   out="$("${PSQL[@]}" -f "$f" 2>&1)"; rc=$?
-  p=$(printf '%s\n' "$out" | grep -c 'PASS: ')
-  printf '%s\n' "$out" | grep 'PASS: ' | sed 's/^/  /'
-  pass=$((pass+p))
-  if [ $rc -ne 0 ]; then
-    fail=$((fail+1)); echo "  GAGAL $(basename "$f")"; printf '%s\n' "$out" | grep -v 'PASS: ' | sed 's/^/    /'
-  fi
+  tally "$(basename "$f")" "$rc" "$out"
 done
 
-echo "== Ringkasan: lulus=$pass gagal=$fail"
+echo "== Tes konkurensi (banyak koneksi nyata)"
+export PSQL_BIN="$PG_BIN_DIR/psql"
+for f in "$HERE"/concurrency/*.sh; do
+  echo " -- $(basename "$f")"
+  out="$(bash "$f" 2>&1)"; rc=$?
+  tally "$(basename "$f")" "$rc" "$out"
+done
+
+echo "== Ringkasan: lulus=$pass gagal=$fail dilewati=$skip"
 [ "$fail" -eq 0 ] && [ "$pass" -gt 0 ]
