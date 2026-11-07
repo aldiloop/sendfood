@@ -1,0 +1,13 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Tool/build outputs
+node_modules/
+dist/
+build/
+coverage/
+.supabase/
+.DS_Store
