@@ -456,7 +456,7 @@ begin
                    'line_total', oi.line_total) order by oi.created_at, oi.id), '[]'::jsonb)
           from public.order_items oi where oi.order_id = o.id)
   from public.orders o
-  join public.stores s on s.id = o.store_id
+  left join public.stores s on s.id = o.store_id
   where (p_status is null or o.order_status = p_status)
     and (   (v_role = 'customer' and o.customer_id = v_uid)
          or (v_role = 'seller' and s.owner_id = v_uid)
@@ -523,6 +523,7 @@ declare
   v_order_id uuid;
   v_order_code text;
   v_existing public.orders%rowtype;
+  v_same_items boolean;
 begin
   if v_user_id is null then
     raise exception using errcode = 'P0001', message = 'authentication_required';
@@ -569,7 +570,31 @@ begin
     from public.orders o
     where o.customer_id = v_user_id and o.idempotency_key = p_idempotency_key;
     if found then
-      if v_existing.store_id is distinct from p_store_id then
+      if v_existing.store_id is distinct from p_store_id
+        or v_existing.delivery_address is distinct from btrim(p_delivery_address)
+        or v_existing.delivery_latitude is distinct from p_delivery_latitude
+        or v_existing.delivery_longitude is distinct from p_delivery_longitude
+        or v_existing.delivery_note is distinct from nullif(btrim(p_delivery_note), '') then
+        raise exception using errcode = 'P0001', message = 'idempotency_key_conflict';
+      end if;
+      -- Items must match the stored order items (product and quantity); malformed items count as a mismatch.
+      begin
+        v_same_items := not exists (
+          (select i.product_id, i.quantity
+             from jsonb_to_recordset(p_items) as i(product_id uuid, quantity integer)
+           except
+           select oi.product_id, oi.quantity from public.order_items oi where oi.order_id = v_existing.id)
+          union all
+          (select oi.product_id, oi.quantity from public.order_items oi where oi.order_id = v_existing.id
+           except
+           select i.product_id, i.quantity
+             from jsonb_to_recordset(p_items) as i(product_id uuid, quantity integer))
+        ) and (select count(*) from jsonb_to_recordset(p_items) as i(product_id uuid, quantity integer))
+              = (select count(*) from public.order_items oi where oi.order_id = v_existing.id);
+      exception when others then
+        v_same_items := false;
+      end;
+      if v_same_items is not true then
         raise exception using errcode = 'P0001', message = 'idempotency_key_conflict';
       end if;
       return query

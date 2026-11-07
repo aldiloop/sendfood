@@ -122,6 +122,53 @@ begin
   perform t.logout();
 end $$;
 
+-- Replay dengan payload berubah ditolak; replay identik mengabaikan status toko saat ini.
+do $$
+declare
+  sA constant uuid := '50000000-0000-0000-0000-00000000000a';
+  pA1 constant text := '60000000-0000-0000-0000-0000000000a1';
+  pA2 constant text := '60000000-0000-0000-0000-0000000000a2';
+  v_id uuid; v_id2 uuid; v_it jsonb := jsonb_build_array(jsonb_build_object('product_id', pA2, 'quantity', 2));
+begin
+  perform t.login('10000000-0000-0000-0000-00000000000a');
+  select order_id into v_id from public.create_order(sA, v_it, 'Jl. Payload', -6.21, 106.81, 'catatan', 'cod', 'payload-key-01');
+  perform t.expect_err('idempotensi: quantity berbeda ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA, jsonb_build_array(jsonb_build_object('product_id', pA2, 'quantity', 3))), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: produk berbeda ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA, jsonb_build_array(jsonb_build_object('product_id', pA1, 'quantity', 2))), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: item tambahan ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA, v_it || jsonb_build_array(jsonb_build_object('product_id', pA1, 'quantity', 1))), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: alamat berbeda ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Lain'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA, v_it), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: koordinat berbeda ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.211, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA, v_it), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: catatan berbeda ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.21, 106.81, ''lain'', ''cod'', ''payload-key-01'')', sA, v_it), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: catatan dihapus ditolak',
+    format('select * from public.create_order(%L, %L::jsonb, ''Jl. Payload'', -6.21, 106.81, null, ''cod'', ''payload-key-01'')', sA, v_it), 'idempotency_key_conflict');
+  perform t.expect_err('idempotensi: items rusak ditolak sebagai conflict',
+    format('select * from public.create_order(%L, ''[{"product_id":"bukan-uuid","quantity":1}]''::jsonb, ''Jl. Payload'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA), 'idempotency_key_conflict');
+  select order_id into v_id2 from public.create_order(sA, v_it, '  Jl. Payload  ', -6.21, 106.81, 'catatan', 'cod', 'payload-key-01');
+  perform t.ok('idempotensi: payload identik (spasi tepi diabaikan) mengembalikan order yang sama', v_id = v_id2);
+  perform t.logout();
+  -- Toko dinonaktifkan setelah order: replay identik tetap mengembalikan order lama.
+  perform t.login('40000000-0000-0000-0000-000000000001');
+  perform public.admin_set_store_active(sA, false);
+  perform t.login('10000000-0000-0000-0000-00000000000a');
+  select order_id into v_id2 from public.create_order(sA, v_it, 'Jl. Payload', -6.21, 106.81, 'catatan', 'cod', 'payload-key-01');
+  perform t.ok('idempotensi: replay mengabaikan toko yang kini nonaktif', v_id = v_id2);
+  perform t.try_order('idempotensi: kunci baru ke toko nonaktif tetap ditolak', 'store_not_available', sA, v_it, '-6.21', '106.81', 'cod', 'payload-key-02');
+  -- Riwayat tetap memuat order dari toko nonaktif.
+  perform t.ok('riwayat: customer tetap melihat order toko nonaktif',
+    exists (select 1 from public.list_my_orders() where order_id = v_id and store_name is null));
+  perform t.logout();
+  perform t.login('40000000-0000-0000-0000-000000000001');
+  perform t.ok('riwayat: admin melihat order toko nonaktif dengan nama toko',
+    exists (select 1 from public.list_my_orders() where order_id = v_id and store_name is not null));
+  perform public.admin_set_store_active(sA, true);
+  perform t.logout();
+end $$;
+
 -- Kunci idempotensi dibatasi per customer; retry setelah harga berubah tidak membuat order baru.
 do $$
 declare v_a uuid; v_b uuid; v_c uuid; v_d uuid;

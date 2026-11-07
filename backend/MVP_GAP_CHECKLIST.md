@@ -20,7 +20,7 @@ Legenda: [x] ada dan teruji lokal, [~] ada tetapi tertutup/sementara, [ ] belum 
 ## P1
 
 - [x] Filter/pengurutan katalog (nama, jarak, ongkir, harga).
-- [x] Riwayat pesanan: `list_my_orders`.
+- [x] Riwayat pesanan: `list_my_orders` (order toko nonaktif tetap tampil; `store_name` null untuk non-admin/non-pemilik).
 - [~] Transfer manual: DITOLAK (`manual_transfer_not_configured`). Tidak ada workflow verifikator, bukti, atau rekening; flag `manual_transfer_enabled` pun tidak membukanya.
 - [~] Dashboard admin: hanya RPC dasar (`admin_set_store_active`, `admin_set_store_delivery_config`, `admin_set_product_available`, `admin_get_policies`, `assign_order_driver`) dan `admin_audit_log`. Tidak ada UI, laporan, atau manajemen user selain provisioning tepercaya.
 - [~] Alamat tersimpan: tabel `customer_addresses` minimal (maks. 10 per customer).
@@ -40,7 +40,7 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 | 3 | Verifikator transfer manual, bukti, rekening | Aktor verifikasi, format bukti (tabel/storage), info rekening, `manual_transfer_enabled`, plus pengembangan workflow | Ditolak; workflow belum ada |
 | 4 | Pembatalan dan refund | `cancellation_enabled=true`, `cancellation_allowed_statuses` (mis. `pending_seller,accepted`), aturan refund | Ditutup. `payment_status` tidak disentuh saat batal; refund belum ada |
 | 5 | Aktor `completed` | `completion_actor` = `customer` / `seller` / `driver` | Default `customer` (konvensi sementara, belum disetujui) |
-| 6 | Pencatatan COD | `cod_collection_recording_enabled=true`, `cod_collection_actor` = `driver` / `admin`; prosedur setoran/rekonsiliasi di luar sistem | Ditutup. `delivered`/`completed` tidak pernah menandai lunas; `record_cod_collection` menandai `verified` |
+| 6 | Pencatatan COD | `cod_collection_recording_enabled=true`, `cod_collection_actor` = `driver` / `admin`; prosedur setoran/rekonsiliasi di luar sistem | Ditutup. `delivered`/`completed` tidak pernah menandai lunas; `record_cod_collection` menandai `verified` (arti COD: tunai diterima, bukan verifikasi transfer). Admin selalu boleh mencatat saat flag aktif, apa pun `cod_collection_actor` |
 
 ## Gap lain yang diketahui
 

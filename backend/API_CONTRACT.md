@@ -44,7 +44,7 @@ Tidak ada akses tulis langsung dari client ke tabel orders, items, atau status h
 }
 ```
 
-`p_idempotency_key` (argumen ke-8, opsional di sisi database) **wajib selalu dikirim oleh client**. Kunci yang sama dari customer yang sama dan toko yang sama mengembalikan pesanan yang sudah ada tanpa membuat duplikat (aman untuk klik ganda/retry). Kunci yang sama dengan toko berbeda ditolak `idempotency_key_conflict`; kunci tidak valid ditolak `invalid_idempotency_key`. Panggilan tanpa kunci tidak di-deduplikasi, hanya diserialkan per customer. Buat kunci baru (mis. UUID) per keranjang/percobaan checkout dan pakai ulang hanya saat retry.
+`p_idempotency_key` (argumen ke-8, opsional di sisi database) **wajib selalu dikirim oleh client**. Kunci yang sama dari customer yang sama dengan payload identik (toko, item produk dan quantity, alamat, koordinat, catatan; spasi di tepi alamat/catatan diabaikan) mengembalikan pesanan yang sudah ada tanpa membuat duplikat (aman untuk klik ganda/retry). Kunci yang sama dengan payload berbeda (toko, item, alamat, koordinat, atau catatan) ditolak `idempotency_key_conflict`; buat kunci baru bila keranjang berubah. Replay hanya membandingkan payload dan mengembalikan pesanan lama apa adanya: status toko, ketersediaan, dan harga saat ini tidak diperiksa ulang (toko yang kini nonaktif tetap mengembalikan pesanan lama; kunci baru ke toko nonaktif ditolak `store_not_available`). kunci tidak valid ditolak `invalid_idempotency_key`. Panggilan tanpa kunci tidak di-deduplikasi, hanya diserialkan per customer. Buat kunci baru (mis. UUID) per keranjang/percobaan checkout dan pakai ulang hanya saat retry.
 
 Respons berupa satu baris berisi `order_id`, `order_code`, `subtotal`, `delivery_fee`, `total`, `payment_method`, `payment_status`, dan `order_status`. Harga produk, subtotal, biaya, total, serta snapshot item diambil/dihitung di backend, bukan dipercaya dari payload.
 
@@ -75,7 +75,7 @@ Hanya admin; order harus berstatus `accepted`, `preparing`, atau `ready_for_pick
 
 ### Pencatatan COD
 
-`supabase.rpc('record_cod_collection', { p_order_id, p_note })` mengembalikan `payment_status` (`verified`).
+`supabase.rpc('record_cod_collection', { p_order_id, p_note })` mengembalikan `payment_status` (`verified`). Untuk COD, `verified` berarti uang tunai sudah dicatat diterima; bukan verifikasi transfer bank, jadi laporan jangan membacanya sebagai bukti transfer. Bila flag `cod_collection_recording_enabled` aktif, admin selalu boleh mencatat, apa pun nilai `cod_collection_actor`.
 
 Ditolak `cod_collection_policy_not_configured` sampai operator mengatur `cod_collection_recording_enabled=true` dan `cod_collection_actor` (`driver` atau `admin`). Admin selalu dapat; driver hanya jika aktor `driver` dan driver ditugaskan pada pesanan. Syarat: pesanan COD (`order_not_cod`), berstatus `delivered`/`completed` (`order_not_delivered`), dan `payment_status` masih `unpaid` (`payment_already_recorded`). **Status `delivered`/`completed` tidak pernah mengubah pembayaran menjadi lunas**; hanya aksi eksplisit ini yang melakukannya, dan dicatat di `order_status_history` (`cod_collected`).
 
@@ -87,7 +87,7 @@ Ditolak `cod_collection_policy_not_configured` sampai operator mengatur `cod_col
 
 ### Riwayat pesanan
 
-`list_my_orders({ p_status, p_limit, p_offset })`: pesanan milik pemanggil sesuai perannya (customer/seller/driver/admin) lengkap dengan `items` (jsonb). Error: `authentication_required`, `invalid_pagination`.
+`list_my_orders({ p_status, p_limit, p_offset })`: pesanan milik pemanggil sesuai perannya (customer/seller/driver/admin) lengkap dengan `items` (jsonb). Pesanan dari toko yang sudah dinonaktifkan tetap muncul; `store_name` bernilai `null` untuk customer/driver karena RLS menyembunyikan toko nonaktif (admin dan pemilik toko tetap melihat nama). Error: `authentication_required`, `invalid_pagination`.
 
 ### Alamat tersimpan
 
