@@ -11,7 +11,8 @@ docs/specs/          PRD, TRD, AFD, DBD, BSD, dan IPD baseline MVP
 backend/
   API_CONTRACT.md    Kontrak integrasi frontend–backend
   migrations/       Migrasi PostgreSQL/Supabase yang versioned
-  tests/            Pemeriksaan struktur skema read-only
+  tests/            Pemeriksaan struktur dan tes runtime lokal (bash backend/tests/run.sh)
+  MVP_GAP_CHECKLIST.md  Gap MVP dan keputusan wajib sebelum pilot
 ```
 
 Mulai dari [PRD](docs/specs/PRD.md), lalu baca [panduan spesifikasi](docs/specs/README.md). Untuk integrasi aktual, gunakan [kontrak API backend](backend/API_CONTRACT.md) sebagai acuan nama field, RPC, status, dan akses data. Beberapa bagian BSD/TRD masih berupa rancangan awal; jangan menganggap usulan tersebut sebagai fitur yang sudah aktif.
@@ -21,11 +22,12 @@ Mulai dari [PRD](docs/specs/PRD.md), lalu baca [panduan spesifikasi](docs/specs/
 - Migrasi fondasi backend tersedia dan telah diterapkan pada proyek Supabase terkait.
 - Backend mencakup enam tabel aplikasi, RLS, dan RPC untuk pembuatan pesanan, transisi status, serta assignment driver.
 - Checkout fondasi hanya menerima **COD** dan akan ditolak sampai toko memiliki konfigurasi biaya pengiriman, radius layanan, dan koordinat.
-- Transfer manual dan pembatalan belum diaktifkan; assignment driver sementara hanya admin.
+- Migrasi hardening `20261108000000` tersedia di branch ini tetapi belum diterapkan ke Supabase; transfer manual, pembatalan, dan pencatatan COD tertutup sampai kebijakan operator diatur; assignment driver sementara hanya admin.
+- Tes runtime lokal dan workflow CI (belum pernah dijalankan di GitHub) tersedia; lihat [panduan backend](backend/README.md). Checklist: [MVP_GAP_CHECKLIST](backend/MVP_GAP_CHECKLIST.md).
 - Pemeriksaan struktur tersedia, tetapi bukan pengganti tes RLS lintas peran dan tes transaksi end-to-end dengan akun staging.
 - Frontend, konfigurasi build PWA, dan deployment aplikasi belum dibuat di repository ini.
 
-Detail batasan dan keputusan operasional yang belum final ada dalam [kontrak API](backend/API_CONTRACT.md#keputusan-yang-harus-ditutup-sebelum-pilot). MVP belum boleh dianggap siap pilot hanya karena skema sudah tersedia.
+Detail batasan dan keputusan operasional yang belum final ada dalam [kontrak API](backend/API_CONTRACT.md#keputusan-yang-harus-ditutup-sebelum-pilot). MVP/PWA belum siap pilot: frontend belum ada dan keputusan bisnis belum ditutup.
 
 ## Alur kerja
 
