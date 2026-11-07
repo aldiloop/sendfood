@@ -1,0 +1,41 @@
+name: backend-tests
+
+on:
+  push:
+    branches: [backend, backend-mvp-hardening]
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Kredensial sekali pakai untuk service container CI, bukan rahasia proyek.
+          POSTGRES_PASSWORD: ci-only-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SENDFOOD_TEST_PGHOST: 127.0.0.1
+      SENDFOOD_TEST_PGPORT: '5432'
+      SENDFOOD_TEST_PGUSER: postgres
+      PGPASSWORD: ci-only-throwaway
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pasang klien PostgreSQL
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          echo "PG_BIN=$(dirname "$(ls /usr/lib/postgresql/*/bin/psql | tail -n1)")" >> "$GITHUB_ENV"
+      - name: Jalankan tes backend (structural, runtime, concurrency)
+        run: bash backend/tests/run.sh
