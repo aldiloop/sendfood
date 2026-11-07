@@ -4,7 +4,7 @@
 # Mode default: menjalankan cluster Postgres sementara (socket unix saja, tanpa TCP)
 # di direktori temporer, membuat database sendfood_test_*, menerapkan shim Supabase,
 # semua migrasi sesuai urutan nama, verify_schema.sql, lalu tes runtime
-# (backend/tests/runtime/*.sql), dan menghapus semuanya di akhir.
+# (backend/tests/runtime/*.sql), tes konkurensi, tes migrasi legacy (DB terpisah), dan menghapus semuanya di akhir.
 #
 # Mode server sendiri: set SENDFOOD_TEST_PGHOST (hanya localhost/127.0.0.1/::1/path socket),
 # SENDFOOD_TEST_PGPORT, SENDFOOD_TEST_PGUSER. Database sendfood_test_* dibuat lalu di-drop.
@@ -101,6 +101,13 @@ done
 echo "== Tes konkurensi (banyak koneksi nyata)"
 export PSQL_BIN="$PG_BIN_DIR/psql"
 for f in "$HERE"/concurrency/*.sh; do
+  echo " -- $(basename "$f")"
+  out="$(bash "$f" 2>&1)"; rc=$?
+  tally "$(basename "$f")" "$rc" "$out"
+done
+
+echo "== Tes migrasi legacy (DB terpisah sendfood_test_legacy_*, psql -1)"
+for f in "$HERE"/migration/*.sh; do
   echo " -- $(basename "$f")"
   out="$(bash "$f" 2>&1)"; rc=$?
   tally "$(basename "$f")" "$rc" "$out"

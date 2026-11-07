@@ -146,6 +146,10 @@ create trigger stores_guard_update
   for each row execute function public.guard_store_update();
 
 -- Products: store_id and timestamps cannot be changed/forged by the client.
+-- PostgreSQL numeric NaN compares >= 0; exclude it explicitly from prices.
+alter table public.products drop constraint if exists products_price_not_nan;
+alter table public.products add constraint products_price_not_nan
+  check (price <> 'NaN'::numeric);
 revoke insert, update on public.products from authenticated;
 grant insert (store_id, name, description, price, image_url, is_available) on public.products to authenticated;
 grant update (name, description, price, image_url, is_available) on public.products to authenticated;
@@ -665,6 +669,17 @@ begin
     where p.id is null or p.store_id <> p_store_id or p.is_available is not true
   ) then
     raise exception using errcode = 'P0001', message = 'product_unavailable_or_wrong_store';
+  end if;
+
+  -- Defense in depth for legacy/bypassed rows; the table constraint blocks new NaN prices.
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_items) as i(product_id uuid, quantity integer)
+    join public.products p on p.id = i.product_id
+    where p.store_id = p_store_id and p.is_available is true
+      and p.price = 'NaN'::numeric
+  ) then
+    raise exception using errcode = 'P0001', message = 'invalid_product_price';
   end if;
 
   select sum(p.price * i.quantity)::numeric(12,2)

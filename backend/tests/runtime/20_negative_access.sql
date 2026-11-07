@@ -155,6 +155,9 @@ begin
   update public.products set price = 10500 where id = '60000000-0000-0000-0000-0000000000a1';
   perform t.ok('produk: seller A mengubah harga produk sendiri',
     (select price from public.products where id = '60000000-0000-0000-0000-0000000000a1') = 10500);
+  perform t.expect_err('produk: seller tidak bisa menetapkan harga NaN',
+    $q$update public.products set price = 'NaN'::numeric where id = '60000000-0000-0000-0000-0000000000a1'$q$,
+    'products_price_not_nan');
   perform t.login('10000000-0000-0000-0000-00000000000a');
   perform t.expect_err('toko: customer tidak bisa insert toko', $q$insert into public.stores (owner_id, name, address) values (auth.uid(), 'x', 'y')$q$, 'row-level security');
   perform t.expect_err('produk: customer tidak bisa insert produk',

@@ -39,7 +39,7 @@ Mode server sendiri: set `SENDFOOD_TEST_PGHOST` (hanya `localhost`, `127.0.0.1`,
 bash backend/tests/run.sh
 ```
 
-Tahap: struktural (`verify_schema.sql`), smoke hardening, fixture, tes runtime positif/negatif (`tests/runtime/*.sql`), lalu tes konkurensi (`tests/concurrency/*.sh`). Runner mencetak jumlah lulus, gagal, dan dilewati; exit code bukan nol jika ada yang gagal. Hasil terakhir yang dijalankan di sandbox (Postgres 16.2 via `pgserver`) dicatat di laporan tugas, bukan diasumsikan di sini; jalankan ulang untuk bukti terbaru. Yang diuji hanya Postgres lokal dengan shim Supabase, bukan Supabase Auth/PostgREST sungguhan.
+Tahap: struktural (`verify_schema.sql`), smoke hardening, fixture, tes runtime positif/negatif (`tests/runtime/*.sql`), tes konkurensi (`tests/concurrency/*.sh`), lalu tes migrasi legacy (`tests/migration/*.sh`, memakai database terpisah `sendfood_test_legacy_*` yang di-drop di akhir; perlu `pg_dump` sebaris dengan `psql`). Runner mencetak jumlah lulus, gagal, dan dilewati; exit code bukan nol jika ada yang gagal. Hasil terakhir yang dijalankan di sandbox (Postgres 16.2 via `pgserver`) dicatat di laporan tugas, bukan diasumsikan di sini; jalankan ulang untuk bukti terbaru. Yang diuji hanya Postgres lokal dengan shim Supabase, bukan Supabase Auth/PostgREST sungguhan.
 
 ## CI
 
@@ -64,8 +64,24 @@ Migrasi fondasi sudah live dan tidak boleh diubah. Migrasi hardening bersifat ma
 2. Buat proyek Supabase **staging** terpisah (atau branch database). Jangan mulai dari produksi. Cadangkan database (dump/PITR) sebelum menerapkan.
 3. Periksa riwayat migrasi target (`supabase migration list` atau tabel `supabase_migrations.schema_migrations`) dan pastikan `20261107000000` sudah tercatat serta `20261108000000` belum.
 4. Terapkan hanya migrasi baru, mis. `supabase db push` ke staging atau jalankan berkas SQL lewat SQL editor oleh operator.
+   - Sebelum menerapkan, jalankan preflight harga NaN di bawah. Jika ada baris, migrasi akan gagal; jangan diperbaiki otomatis.
+   - Atomisitas hanya terbukti untuk runner lokal `psql -1 -f <berkas>` (satu transaksi; lihat `tests/migration/10_legacy_nan_migration.sh`). `psql -f` TANPA `-1` terbukti tidak atomik (perubahan parsial tertinggal saat gagal) dan tidak boleh dipakai. Atomisitas `supabase db push` atau SQL editor BELUM diuji di sini; jika memakai SQL editor, jalankan seluruh berkas dalam satu `begin; ... commit;` eksplisit dan verifikasi rollback di staging lebih dulu.
 5. Verifikasi di staging: jalankan `tests/verify_schema.sql`; buat akun uji terpisah per peran (customer, seller, driver, admin) lewat Supabase Auth, promosikan lewat `provision_set_user_role`, lalu uji dengan JWT asli: katalog anon, checkout dengan idempotency key, alur status lengkap, penolakan akses lintas peran, dan bahwa `manual_transfer`, pembatalan, serta `record_cod_collection` ditolak sebelum kebijakan diatur.
 6. Perbarui frontend sesuai bagian "Perubahan yang berdampak pada frontend" di `API_CONTRACT.md` sebelum atau bersamaan dengan produksi (kontrak `create_order` berubah).
 7. Hanya setelah staging terverifikasi dan keputusan bisnis ditutup, terapkan ke produksi dengan jadwal dan rencana rollback (restore cadangan; tidak ada migrasi turun).
 
 Langkah-langkah ini belum dijalankan terhadap proyek Supabase mana pun.
+
+## Preflight harga NaN sebelum migrasi hardening
+
+Kolom `products.price` di fondasi hanya memakai `check (price >= 0)`, dan di PostgreSQL `'NaN'::numeric >= 0` bernilai benar, sehingga harga NaN dapat tersimpan. Migrasi hardening menambah constraint `products_price_not_nan` dan akan **gagal tertutup** (SQLSTATE `23514`, `check constraint "products_price_not_nan" of relation "products" is violated by some row`, exit psql 3) jika ada baris NaN; seluruh migrasi di-rollback pada jalur `psql -1`, dan baris legacy tidak diubah.
+
+Audit live **BELUM TERLAKSANA**: tidak ada akses baca terotorisasi ke Supabase dari lingkungan pengembangan ini, sehingga keadaan produksi tidak diketahui (jangan menganggap bersih). Operator tepercaya menjalankan query read-only ini di database target:
+
+```sql
+select count(*) as jumlah_harga_nan from public.products where price = 'NaN'::numeric;
+select id, store_id, name, price, is_available
+from public.products where price = 'NaN'::numeric order by created_at limit 100;
+```
+
+Jika hasilnya bukan nol, putuskan per baris (memerlukan keputusan pemilik/operator; tidak dilakukan otomatis). Opsi: (a) nonaktifkan produk lalu set harga valid yang disetujui penjual; (b) nonaktifkan produk (`is_available=false`) dan tetapkan harga sementara, mis. 0, hingga penjual memperbaiki; (c) hapus produk jika belum dipakai (periksa dulu `order_items` yang merujuknya; jangan hapus yang punya riwayat). Cadangkan data sebelum DML apa pun. Opsi (b) hanya diuji pada fixture lokal terpisah di `tests/migration/10_legacy_nan_migration.sh`.

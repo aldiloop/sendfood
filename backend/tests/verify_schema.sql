@@ -38,6 +38,17 @@ from (
              where t.relnamespace = 'public'::regnamespace
                and ix.relname in ('order_items_order_id_idx','order_status_history_order_created_idx')
              limit 2) as expected_indexes)
+    ),
+    (
+      'product price excludes numeric NaN',
+      (select exists (
+       select 1
+       from pg_catalog.pg_constraint c
+       where c.conrelid = 'public.products'::regclass
+         and c.conname = 'products_price_not_nan'
+         and c.contype = 'c'
+         and c.convalidated
+       limit 1))
     )
 ) as checks(check_name, passed)
 order by check_name

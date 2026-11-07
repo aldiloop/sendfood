@@ -44,6 +44,7 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 
 ## Gap lain yang diketahui
 
+- Audit live harga NaN di `products` BELUM TERLAKSANA (tidak ada akses baca terotorisasi); jalankan preflight di `README.md` sebelum migrasi hardening karena migrasi gagal tertutup bila ada baris NaN.
 - Migrasi hardening belum diterapkan ke staging/produksi; langkah ada di `README.md`. Tes belum dijalankan terhadap Supabase sungguhan (staging).
 - Uji lintas peran dengan JWT/Auth asli dan PostgREST belum dilakukan; harness meniru lewat `SET ROLE` dan `request.jwt.claims`.
 - Docker/Supabase CLI tidak dipakai/dijalankan di sandbox pengembangan.
