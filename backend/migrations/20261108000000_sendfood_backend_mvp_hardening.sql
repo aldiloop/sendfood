@@ -561,6 +561,9 @@ begin
     or p_delivery_longitude not between -180 and 180 then
     raise exception using errcode = 'P0001', message = 'valid_delivery_coordinates_required';
   end if;
+  -- Storage is numeric(9,6): round once so radius check, replay compare and insert agree.
+  p_delivery_latitude := round(p_delivery_latitude, 6);
+  p_delivery_longitude := round(p_delivery_longitude, 6);
 
   -- Serialize checkouts of the same customer (double-click / retry protection).
   perform pg_advisory_xact_lock(hashtextextended('create_order:' || v_user_id::text, 0));

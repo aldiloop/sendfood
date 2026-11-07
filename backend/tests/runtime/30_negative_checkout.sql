@@ -128,7 +128,7 @@ declare
   sA constant uuid := '50000000-0000-0000-0000-00000000000a';
   pA1 constant text := '60000000-0000-0000-0000-0000000000a1';
   pA2 constant text := '60000000-0000-0000-0000-0000000000a2';
-  v_id uuid; v_id2 uuid; v_it jsonb := jsonb_build_array(jsonb_build_object('product_id', pA2, 'quantity', 2));
+  v_id uuid; v_id2 uuid; v_p1 uuid; v_p2 uuid; v_it jsonb := jsonb_build_array(jsonb_build_object('product_id', pA2, 'quantity', 2));
 begin
   perform t.login('10000000-0000-0000-0000-00000000000a');
   select order_id into v_id from public.create_order(sA, v_it, 'Jl. Payload', -6.21, 106.81, 'catatan', 'cod', 'payload-key-01');
@@ -150,6 +150,14 @@ begin
     format('select * from public.create_order(%L, ''[{"product_id":"bukan-uuid","quantity":1}]''::jsonb, ''Jl. Payload'', -6.21, 106.81, ''catatan'', ''cod'', ''payload-key-01'')', sA), 'idempotency_key_conflict');
   select order_id into v_id2 from public.create_order(sA, v_it, '  Jl. Payload  ', -6.21, 106.81, 'catatan', 'cod', 'payload-key-01');
   perform t.ok('idempotensi: payload identik (spasi tepi diabaikan) mengembalikan order yang sama', v_id = v_id2);
+  -- Koordinat dengan presisi >6 desimal: pembulatan sekali, replay tetap cocok.
+  select order_id into v_p1 from public.create_order(sA, v_it, 'Jl. Presisi', -6.2100004, 106.8100004, null, 'cod', 'precision-key-01');
+  select order_id into v_p2 from public.create_order(sA, v_it, 'Jl. Presisi', -6.2100004, 106.8100004, null, 'cod', 'precision-key-01');
+  perform t.ok('idempotensi: koordinat 7 desimal, replay mengembalikan order yang sama', v_p1 = v_p2);
+  perform t.ok('koordinat 7 desimal tersimpan dibulatkan ke 6 desimal',
+    exists (select 1 from public.orders where id = v_p1 and delivery_latitude = -6.210000 and delivery_longitude = 106.810000));
+  select order_id into v_p2 from public.create_order(sA, v_it, 'Jl. Presisi', -6.21, 106.81, null, 'cod', 'precision-key-01');
+  perform t.ok('idempotensi: replay dengan nilai terbulat setara mengembalikan order yang sama', v_p1 = v_p2);
   perform t.logout();
   -- Toko dinonaktifkan setelah order: replay identik tetap mengembalikan order lama.
   perform t.login('40000000-0000-0000-0000-000000000001');
