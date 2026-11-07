@@ -43,7 +43,7 @@ Tahap: struktural (`verify_schema.sql`), smoke hardening, fixture, tes runtime p
 
 ## CI
 
-`.github/workflows/backend-tests.yml` menjalankan runner yang sama terhadap service container Postgres 16 (mode `SENDFOOD_TEST_PGHOST=127.0.0.1`). Workflow ini **belum pernah dijalankan** (GitHub Actions tidak dapat dijalankan dari lingkungan pengembangan); hanya sintaks YAML yang divalidasi lokal. Anggap statusnya tidak diketahui sampai ada run pertama di GitHub.
+`.github/workflows/backend-tests.yml` menjalankan runner yang sama terhadap service container Postgres 16 (mode `SENDFOOD_TEST_PGHOST=127.0.0.1`). Pada commit `41eb679` workflow `backend-tests` (event push) sudah dijalankan dua kali di GitHub dan keduanya berstatus completed/success: [run 42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072) dan [run 42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122). Itu hanya membuktikan runner SQL/konkurensi lulus di service container Postgres 16; **bukan** uji Supabase Auth, PostgREST, atau staging, yang belum dilakukan. Status CI untuk commit yang lebih baru harus dicek terpisah di tab Actions.
 
 ## Provisioning admin dan kebijakan (lingkungan tepercaya)
 

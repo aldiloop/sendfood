@@ -206,6 +206,10 @@ security definer
 set search_path = pg_catalog, public
 as $$
 begin
+  -- Serialkan cek+insert per customer (bukan lock global): tanpa ini dua INSERT
+  -- bersamaan pada 9 alamat sama-sama melihat count=9 dan lolos ke 11.
+  -- Lock transaksi dilepas otomatis saat commit/rollback.
+  perform pg_advisory_xact_lock(hashtextextended('customer_addresses:' || new.customer_id::text, 0));
   if (select count(*) from public.customer_addresses a where a.customer_id = new.customer_id) >= 10 then
     raise exception using errcode = 'P0001', message = 'address_limit_reached';
   end if;

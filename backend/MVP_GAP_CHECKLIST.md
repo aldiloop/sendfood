@@ -47,6 +47,6 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 - Migrasi hardening belum diterapkan ke staging/produksi; langkah ada di `README.md`. Tes belum dijalankan terhadap Supabase sungguhan (staging).
 - Uji lintas peran dengan JWT/Auth asli dan PostgREST belum dilakukan; harness meniru lewat `SET ROLE` dan `request.jwt.claims`.
 - Docker/Supabase CLI tidak dipakai/dijalankan di sandbox pengembangan.
-- Workflow CI `.github/workflows/backend-tests.yml` ditulis tetapi **belum pernah dijalankan** (hanya sintaks YAML yang diperiksa lokal).
+- Workflow CI `.github/workflows/backend-tests.yml` sudah dijalankan di GitHub untuk commit `41eb679`: dua run push, keduanya completed/success ([42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072), [42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122)). Cakupannya hanya Postgres 16 biasa dengan shim Supabase; bukan Supabase Auth/PostgREST/staging, yang tetap belum diuji.
 - Tidak ada notifikasi, pembayaran online, penugasan otomatis, rate limiting tingkat API, atau pemantauan/backup yang dikonfigurasi dari repo ini.
 - Kunci `service_role` tidak pernah disimpan di repo; provisioning admin pertama harus dilakukan manual oleh operator tepercaya.
