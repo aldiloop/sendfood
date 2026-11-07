@@ -106,6 +106,176 @@ Perubahan admin dicatat di `admin_audit_log` (admin dapat membaca). Seller tidak
 
 `provision_set_user_role(p_user_id, p_role, p_reason)` dan `provision_set_policy(p_key, p_value)` hanya dapat dieksekusi `service_role`/`postgres`; anon/authenticated ditolak oleh hak akses. Jangan dipanggil dari browser. Kunci kebijakan valid: `completion_actor` (`customer|seller|driver`), `cancellation_enabled`, `manual_transfer_enabled`, `cod_collection_recording_enabled` (`true|false`), `cancellation_allowed_statuses` (daftar dipisah koma dari `pending_seller,accepted,preparing,ready_for_pickup`), `cod_collection_actor` (`driver|admin`). Kesalahan: `invalid_policy_value`, `unknown_policy_key`, `profile_not_found`. Catatan: `manual_transfer_enabled=true` pun belum membuka transfer, karena workflow verifikasi/bukti belum ada; `create_order` tetap menolak `manual_transfer`.
 
+## Ringkasan kontrak untuk frontend (Muse)
+
+Bagian ini merangkum deklarasi SQL apa adanya (rujukan baris: `F` = `20261107000000_sendfood_backend_foundation.sql`, `H` = `20261108000000_sendfood_backend_mvp_hardening.sql`). Bila ada selisih, SQL yang benar.
+
+### Status penerapan (penting)
+
+Migrasi hardening (`H`) di PR ini **belum diterapkan ke proyek Supabase mana pun**; hanya diuji pada Postgres lokal sekali pakai. Frontend boleh dibangun *contract-first* terhadap dokumen ini, tetapi **tidak boleh mengasumsikan endpoint baru (`list_stores`, `search_products`, `list_my_orders`, `record_cod_collection`, `admin_*`, `create_order` 8 argumen, `customer_addresses`) sudah aktif** di lingkungan mana pun sampai migrasi diterapkan dan dikonfirmasi.
+
+### Cara memanggil dari client
+
+- Base URL dan anon key berasal dari env proyek Supabase (mis. `VITE_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`); jangan menulis hostname di kode. Jangan pernah memakai `service_role` di browser.
+- RPC: `supabase.rpc('<nama>', { p_arg: ... })`, jalur PostgREST relatif `POST /rest/v1/rpc/<nama>` dengan body JSON bernama-argumen. Argumen ber-default boleh dihilangkan.
+- Tabel: `supabase.from('<tabel>').select('kolom, ...')`, jalur relatif `/rest/v1/<tabel>`.
+- Fungsi `returns table`/`setof` mengembalikan array baris; fungsi skalar mengembalikan nilai tunggal; `returns void` mengembalikan `null`/tanpa isi.
+- Contoh:
+
+```js
+const { data, error } = await supabase.rpc('list_stores', {
+  p_query: 'bakso', p_latitude: -6.2, p_longitude: 106.8, p_sort: 'nearest', p_limit: 20, p_offset: 0,
+})
+const { data: store } = await supabase.from('stores').select('id, name, delivery_fee').eq('is_active', true)
+```
+
+Kegagalan RPC datang sebagai `error.message` berisi kode snake_case (mis. `invalid_sort`), `errcode P0001`.
+
+### Tabel yang boleh diakses client langsung (grant + RLS)
+
+| Tabel | Hak client | Catatan |
+|---|---|---|
+| `profiles` | `select` (authenticated); `update (full_name, phone, avatar_url)` | F:260-261; role/id/created_at tidak bisa diubah (`profile_role_change_forbidden`, H:99-117) |
+| `stores` | `select` (anon, authenticated); seller: `insert`/`update` kolom terbatas | F:262-266; kolom operasional ditolak (`store_operational_field_forbidden`, `store_location_locked`, H:121-142) |
+| `products` | `select` (anon, authenticated); seller: `insert (store_id, name, description, price, image_url, is_available)`, `update (name, description, price, image_url, is_available)`, `delete` | F:267-268 dipersempit H:153-155 |
+| `orders`, `order_items`, `order_status_history` | **hanya `select`** (authenticated, peserta pesanan) | F:269, H:160-175. **Tulis langsung (insert/update/delete) ditolak** `direct_write_forbidden` (trigger H:69-96; client juga tidak diberi grant tulis) |
+| `customer_addresses` | `select`, `delete`, `insert`/`update` pada (label, address, latitude, longitude, note) | H:229-250, hanya milik sendiri; maks. 10 alamat (`address_limit_reached`) |
+| `admin_audit_log` | `select` (authenticated), RLS hanya admin | H:44-50 |
+| `ops_policy` | **tidak ada** (revoke dari public/anon/authenticated) | H:22-23; admin membaca lewat `admin_get_policies()` |
+
+Order selalu dibuat lewat `create_order`, status lewat `change_order_status`, driver lewat `assign_order_driver`.
+
+### Katalog dan riwayat: signature lengkap
+
+Semua `p_*` di bawah bertipe sesuai deklarasi; default sebagaimana tertulis.
+
+**`list_stores`** (H:310-356; SECURITY INVOKER, `stable`; grant anon + authenticated H:418-419)
+
+```
+list_stores(p_query text default null, p_latitude numeric default null, p_longitude numeric default null,
+            p_sort text default 'name', p_limit integer default 20, p_offset integer default 0)
+returns table (id uuid, name text, description text, address text,
+  latitude numeric, longitude numeric, phone text, image_url text, opening_hours jsonb,
+  delivery_fee numeric, service_radius_km numeric,
+  distance_km double precision, within_service_radius boolean)
+```
+
+- `p_sort` yang diizinkan: `name`, `nearest`, `farthest`, `delivery_fee`.
+- Urutan: sesuai `p_sort` (`nearest` jarak naik, `farthest` jarak turun, `delivery_fee` naik; nilai null di akhir), lalu selalu `name` naik, `id` naik. Hanya `is_active = true`. Pencarian `p_query` mencocokkan `name`/`description` (ILIKE, karakter `% _ \` di-escape; query kosong/spasi = tanpa filter).
+- `distance_km` null bila koordinat pemanggil tidak dikirim; `within_service_radius` null bila jarak atau radius null.
+
+**`search_products`** (H:358-416; SECURITY INVOKER, `stable`; grant anon + authenticated H:420-421)
+
+```
+search_products(p_query text default null, p_store_id uuid default null,
+                p_min_price numeric default null, p_max_price numeric default null,
+                p_latitude numeric default null, p_longitude numeric default null,
+                p_sort text default 'name', p_limit integer default 20, p_offset integer default 0)
+returns table (id uuid, store_id uuid, store_name text, name text, description text,
+  price numeric, image_url text, delivery_fee numeric, service_radius_km numeric,
+  distance_km double precision, within_service_radius boolean)
+```
+
+- `p_sort` yang diizinkan: `name`, `nearest`, `farthest`, `cheapest`, `priciest`, `delivery_fee`.
+- Urutan: sesuai `p_sort` (`cheapest` harga naik, `priciest` harga turun, dst.; null di akhir), lalu `name` naik, `id` naik. Hanya produk `is_available = true` dari toko `is_active = true`. Query mencocokkan nama produk, deskripsi, atau nama toko.
+
+**Validasi katalog** (`validate_catalog_params`, H:271-304, dipakai kedua fungsi di atas):
+
+- `p_limit` harus 1–100, `p_offset` ≥ 0 (default 20/0); selain itu `invalid_pagination`.
+- `p_query` maks. 100 karakter, jika lebih `search_query_too_long`.
+- `p_sort` di luar daftar (atau null) → `invalid_sort`.
+- Hanya salah satu dari latitude/longitude, atau di luar rentang (lat −90..90, lon −180..180) → `valid_coordinates_required`.
+- `nearest`/`farthest` tanpa koordinat → `location_required_for_sort`.
+- Khusus `search_products`: harga negatif atau `p_min_price > p_max_price` → `invalid_price_range` (H:385-389).
+
+**`list_my_orders`** (H:427-475; SECURITY INVOKER, `stable`; grant **authenticated saja**, anon di-revoke H:477-478)
+
+```
+list_my_orders(p_status public.order_status default null, p_limit integer default 20, p_offset integer default 0)
+returns table (order_id uuid, order_code text, store_id uuid, store_name text,
+  customer_id uuid, driver_id uuid,
+  delivery_address text, delivery_latitude numeric, delivery_longitude numeric, delivery_note text,
+  subtotal numeric, delivery_fee numeric, total numeric,
+  payment_method public.payment_method, payment_status public.payment_status,
+  order_status public.order_status, created_at timestamptz, items jsonb)
+```
+
+- Error: `authentication_required` (tanpa sesi), `invalid_pagination` (limit 1–100, offset ≥ 0).
+- Cakupan menurut role: customer = `customer_id` sendiri; seller = toko miliknya; driver = `driver_id` sendiri; admin = semua. `p_status` null = semua status.
+- Urutan: `created_at` turun, lalu `id` turun.
+- `items` (jsonb array; `[]` bila kosong), diurutkan `order_items.created_at`, lalu `order_items.id`. Setiap elemen persis:
+
+| Key | Sumber kolom | Tipe |
+|---|---|---|
+| `product_id` | `order_items.product_id` | uuid |
+| `name` | `order_items.product_name_snapshot` | text |
+| `unit_price` | `order_items.unit_price_snapshot` | numeric(12,2) |
+| `quantity` | `order_items.quantity` | integer |
+| `line_total` | `order_items.line_total` | numeric(12,2) |
+
+### `create_order`
+
+`H:495-520`; SECURITY DEFINER; grant authenticated saja (anon di-revoke, H:723-724).
+
+```
+create_order(p_store_id uuid, p_items jsonb, p_delivery_address text,
+             p_delivery_latitude numeric, p_delivery_longitude numeric,
+             p_delivery_note text default null,
+             p_payment_method public.payment_method default 'cod',
+             p_idempotency_key text default null)
+returns table (order_id uuid, order_code text, subtotal numeric(12,2), delivery_fee numeric(12,2),
+  total numeric(12,2), payment_method public.payment_method, payment_status public.payment_status,
+  order_status public.order_status)
+```
+
+Versi 7 argumen dari `F` di-drop (H:493). Tiga argumen terakhir (`p_delivery_note`, `p_payment_method`, `p_idempotency_key`) ber-default sehingga boleh dihilangkan, tetapi client **wajib** mengirim `p_idempotency_key`.
+
+### Tipe kembalian semua RPC yang dapat dipanggil client
+
+Semua fungsi di bawah di-grant ke `authenticated` (kecuali ditandai anon juga); `public` dan `anon` di-revoke bila tidak ditandai.
+
+| Fungsi | Deklarasi | Tipe kembalian | Role yang dapat eksekusi |
+|---|---|---|---|
+| `create_order` | H:495 | table (8 kolom di atas) | authenticated (H:723-724) |
+| `change_order_status(p_order_id uuid, p_new_status order_status, p_note text default null)` | H:730 | skalar `public.order_status` (status baru) | authenticated (H:836-837) |
+| `assign_order_driver(p_order_id uuid, p_driver_id uuid)` | H:843 | skalar `uuid` (id driver) | authenticated (H:884-885) |
+| `record_cod_collection(p_order_id uuid, p_note text default null)` | H:891 | skalar `public.payment_status` (`verified`) | authenticated (H:940-941) |
+| `admin_set_store_active(p_store_id uuid, p_active boolean)` | H:947 | skalar `boolean` | authenticated (H:1056-1057); admin saja di dalam fungsi |
+| `admin_set_store_delivery_config(p_store_id uuid, p_delivery_fee numeric, p_service_radius_km numeric, p_latitude numeric default null, p_longitude numeric default null)` | H:970 | `void` | authenticated (H:1058-1059); admin saja |
+| `admin_set_product_available(p_product_id uuid, p_available boolean)` | H:1017 | skalar `boolean` | authenticated (H:1060-1061); admin saja |
+| `admin_get_policies()` | H:1041 | table `(key text, value text)` | authenticated (H:1062-1063); admin saja |
+| `list_stores` | H:310 | table (13 kolom) | anon + authenticated (H:418-419) |
+| `search_products` | H:358 | table (11 kolom) | anon + authenticated (H:420-421) |
+| `list_my_orders` | H:427 | table (18 kolom) | authenticated (H:477-478) |
+
+Tidak ada fungsi `setof` pada kontrak ini. Seluruh nama di dokumen ini (termasuk di bagian RPC di atas) sudah dicocokkan dengan deklarasi SQL; tidak ada nama yang tidak ditemukan.
+
+### Provisioning: BUKAN API frontend
+
+`provision_set_user_role(p_user_id uuid, p_role public.app_role, p_reason text default null)` → `public.app_role` (H:1071) dan `provision_set_policy(p_key text, p_value text)` → `void` (H:1097): `revoke all ... from public, anon, authenticated` lalu `grant execute ... to service_role` (H:1140-1143; `postgres` sebagai pemilik). Hanya dari SQL editor/CLI/CI tepercaya; **jangan pernah dari frontend**.
+
+### Fungsi internal (bukan API aplikasi)
+
+Fungsi/trigger berikut adalah detail implementasi. Jangan dipanggil atau dibangun di atasnya oleh frontend:
+
+| Fungsi | Hak eksekusi client |
+|---|---|
+| `haversine_km` (H:254) | **Di-grant ke anon dan authenticated** (H:267-268), sehingga secara teknis dapat dipanggil lewat `/rest/v1/rpc/haversine_km`. Dibuka agar `list_stores`/`search_products` (SECURITY INVOKER) berjalan; bukan API aplikasi. |
+| `validate_catalog_params` (H:271) | **Di-grant ke anon dan authenticated** (H:306-307) dengan alasan sama; bukan API aplikasi. |
+| `current_app_role` (F:166) | Di-grant ke authenticated (F:531-532), dipakai kebijakan RLS; bukan API aplikasi (role dapat dibaca dari `profiles`). |
+| `ops_policy_value` (H:52) | Di-revoke dari public/anon/authenticated (H:61) |
+| `block_client_direct_write` (H:69), `guard_profile_update` (H:99), `guard_store_update` (H:121) | Di-revoke dari public/anon/authenticated (H:84, 114, 142); fungsi trigger |
+| `limit_customer_addresses` (H:206) | Di-revoke (H:223); fungsi trigger |
+| `touch_updated_at` (F:123), `handle_new_auth_user` (F:143) | Di-revoke (F:533-534); fungsi trigger |
+
+### Aturan perilaku yang wajib dipatuhi UI
+
+- `manual_transfer` **selalu ditolak** `manual_transfer_not_configured` (H:543-546), bahkan bila `ops_policy.manual_transfer_enabled=true`. Jangan tampilkan sebagai pilihan.
+- Pembatalan (`cancellation_policy_not_configured`, H:769) dan pencatatan COD (`cod_collection_policy_not_configured`, H:910) **fail closed** (tertutup) sampai operator mengatur `ops_policy`. UI harus menangani kedua error tersebut.
+- `delivered`/`completed` **tidak sama dengan lunas**. Hanya `record_cod_collection` yang mengubah `payment_status` menjadi `verified` (H:933); tampilkan `payment_status` apa adanya.
+- Frontend **selalu mengirim `p_idempotency_key`** pada `create_order` (kunci baru per percobaan checkout, dipakai ulang hanya saat retry).
+- Catatan: `status_unchanged` hanya ada di `change_order_status` versi foundation (F:491) yang sudah digantikan; versi hardening tidak memunculkannya, jadi tidak perlu ditangani.
+
 ## Perubahan yang berdampak pada frontend
 
 1. `create_order` memiliki argumen ke-8 `p_idempotency_key`; kirim selalu. Fungsi 7 argumen lama diganti (drop) oleh migrasi.
