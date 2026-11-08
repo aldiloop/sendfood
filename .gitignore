@@ -14,3 +14,7 @@ coverage/
 
 # Biner Postgres lokal untuk tes (lihat backend/README.md)
 .pgtools/
+
+# Python bytecode
+__pycache__/
+*.pyc
