@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SendFood — Mockup UI/UX MVP (Luna Palette)</title>
+<!--
+  Mockup statis untuk ditinjau, BUKAN kode aplikasi.
+  Semua nama toko, menu, orang, dan angka adalah DATA CONTOH.
+  Cakupan mengikuti docs/specs/PRD.md, docs/specs/DBD.md, dan backend/API_CONTRACT.md.
+-->
+<style>
+  :root{
+    /* Luna palette */
+    --luna-100:#A7EBF2; /* Ice Aqua   : latar highlight, badge. Bukan untuk teks di atas putih */
+    --luna-300:#54ACBF; /* Teal Sky   : focus ring, ikon dekoratif. Bukan untuk teks kecil di atas putih */
+    --luna-500:#26658C; /* Ocean      : warna utama, tombol primary, tautan */
+    --luna-700:#023859; /* Deep Navy  : header, chip terpilih */
+    --luna-900:#011C40; /* Midnight   : teks utama */
+    /* Netral */
+    --bg:#F4FAFB; --surface:#FFFFFF; --line:#DCEBEF; --muted:#557083;
+    /* Semantik (status selalu disertai label teks) */
+    --success:#1E7A4C; --success-bg:#E3F4EA;
+    --warning:#8A5A00; --warning-bg:#FFF2D6;
+    --danger:#B42318;  --danger-bg:#FDE7E5;
+    --info:#26658C;    --info-bg:#E2F5F8;
+    --r-sm:10px; --r-md:14px; --r-lg:20px;
+    --shadow:0 4px 14px rgba(1,28,64,.08);
+    --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);color:var(--luna-900);background:var(--luna-900);padding:40px 20px 80px}
+  h1,h2,h3,h4{line-height:1.25}
+  .wrap{max-width:1500px;margin:0 auto}
+
+  /* ---------- Halaman dokumentasi ---------- */
+  .page-head{color:#fff;margin-bottom:28px}
+  .page-head h1{font-size:34px}
+  .page-head h1 span{color:var(--luna-100)}
+  .page-head p{color:var(--luna-100);margin-top:6px;font-size:14px;max-width:820px;line-height:1.6}
+  .notice{background:var(--warning-bg);color:var(--warning);border-radius:var(--r-md);padding:12px 16px;font-size:13px;margin:16px 0 0;max-width:820px;line-height:1.5}
+  .group{margin-top:56px}
+  .group > h2{color:#fff;font-size:22px;margin-bottom:4px}
+  .group > p{color:var(--luna-100);font-size:13px;margin-bottom:22px}
+  .panel{background:rgba(255,255,255,.05);border:1px solid rgba(167,235,242,.2);border-radius:var(--r-lg);padding:22px;color:#fff}
+  .panel h3{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--luna-100);margin-bottom:14px}
+  .tokens{display:grid;grid-template-columns:2fr 1fr 1fr;gap:18px}
+  .sw-row{display:flex;gap:10px}
+  .sw{flex:1;font-size:11px;line-height:1.5}
+  .sw i{display:block;height:84px;border-radius:42px;margin-bottom:8px}
+  .sw b{font-size:12px;display:block}
+  .sem{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .comp{display:flex;flex-direction:column;gap:10px}
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+  .rules li{font-size:13px;line-height:1.6;margin-left:18px}
+  .rules p{font-size:13px;line-height:1.6}
+
+  /* ---------- Bingkai ponsel ---------- */
+  .screens{display:flex;flex-wrap:wrap;gap:34px}
+  .shot{display:flex;flex-direction:column;gap:10px;align-items:center}
+  .shot > figcaption{color:var(--luna-100);font-size:13px;font-weight:600;max-width:300px;text-align:center}
+  .shot > figcaption small{display:block;font-weight:400;opacity:.8;margin-top:2px}
+  .phone{width:300px;height:640px;border:9px solid #000;border-radius:40px;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 24px 50px rgba(0,0,0,.4)}
+  .status{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;font-size:11px;font-weight:600;flex-shrink:0}
+  .body{flex:1;overflow:hidden;padding:6px 16px 16px;position:relative}
+  .demo-tag{position:absolute;top:34px;right:10px;z-index:20;background:var(--warning-bg);color:var(--warning);font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;letter-spacing:.5px}
+
+  /* ---------- Komponen ---------- */
+  .btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:46px;border:none;border-radius:var(--r-md);font:600 14px var(--font);cursor:pointer}
+  .btn-primary{background:var(--luna-500);color:#fff}
+  .btn-secondary{background:var(--surface);color:var(--luna-500);border:1.5px solid var(--luna-500)}
+  .btn-destructive{background:var(--surface);color:var(--danger);border:1.5px solid var(--danger)}
+  .btn-dark{background:var(--luna-900);color:#fff}
+  .btn-sm{min-height:38px;font-size:12px;border-radius:var(--r-sm)}
+  .btn[disabled]{background:#C9D6DC;color:#5D7380;border:none}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:12px;font-weight:600;color:var(--luna-700)}
+  .input{min-height:44px;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:var(--luna-900);display:flex;align-items:center;gap:8px}
+  .input.ph{color:var(--muted)}
+  .input.focus{border-color:var(--luna-500);box-shadow:0 0 0 3px rgba(84,172,191,.35)}
+  .input.err{border-color:var(--danger)}
+  .hint{font-size:11px;color:var(--muted)}
+  .hint.err{color:var(--danger)}
+  .chip{min-height:32px;display:inline-flex;align-items:center;padding:0 12px;border-radius:30px;font-size:12px;font-weight:500;background:var(--surface);border:1px solid var(--line);white-space:nowrap;color:var(--luna-900)}
+  .chip.on{background:var(--luna-700);border-color:var(--luna-700);color:#fff}
+  .chips{display:flex;gap:6px;overflow:hidden}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .b-info{background:var(--info-bg);color:var(--info)}
+  .b-ok{background:var(--success-bg);color:var(--success)}
+  .b-warn{background:var(--warning-bg);color:var(--warning)}
+  .b-err{background:var(--danger-bg);color:var(--danger)}
+  .b-mute{background:#E9EFF2;color:var(--muted)}
+  .b-aqua{background:var(--luna-100);color:var(--luna-700)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px}
+  .row{display:flex;align-items:center;gap:8px}
+  .between{justify-content:space-between}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .muted{color:var(--muted)}
+  .xs{font-size:10px}.sm{font-size:12px}.md{font-size:14px}
+  .bold{font-weight:700}
+  .link{color:var(--luna-500);font-weight:600;font-size:12px}
+  .icon-btn{width:40px;height:40px;flex-shrink:0;border-radius:12px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:16px}
+  .ph-img{display:grid;place-items:center;flex-shrink:0;background:linear-gradient(135deg,var(--luna-100),#D9F5F8);color:var(--luna-700);font-size:28px;border-radius:var(--r-md)}
+  .topbar{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+  .topbar h3{font-size:16px}
+  .sec{display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px}
+  .sec b{font-size:14px}
+  .divider{height:1px;background:var(--line);margin:8px 0}
+  .money{display:flex;justify-content:space-between;font-size:12px;padding:3px 0}
+  .money.total{font-size:14px;font-weight:700;border-top:1px dashed var(--line);margin-top:4px;padding-top:8px}
+  .stepper{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}
+  .stepper span{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--luna-100);color:var(--luna-700)}
+  .stepper span.p{background:var(--luna-500);color:#fff}
+  .add{min-width:58px;height:32px;border-radius:9px;background:var(--luna-500);color:#fff;font-size:12px;font-weight:600;display:grid;place-items:center;padding:0 10px}
+  .toggle{width:40px;height:24px;border-radius:20px;background:#C9D6DC;position:relative;flex-shrink:0}
+  .toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .toggle.on{background:var(--luna-500)}
+  .toggle.on::after{left:19px}
+  .nav{height:62px;flex-shrink:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;font-size:10px;color:var(--muted)}
+  .nav div{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px}
+  .nav i{font-style:normal;font-size:17px;padding:2px 14px;border-radius:14px}
+  .nav .on{color:var(--luna-500);font-weight:700}
+  .nav .on i{background:var(--luna-100)}
+  .floatbar{position:absolute;left:12px;right:12px;bottom:12px;background:var(--luna-900);color:#fff;border-radius:16px;padding:10px 12px 10px 14px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 10px 20px rgba(1,28,64,.35)}
+  .floatbar small{display:block;font-size:10px;color:var(--luna-100)}
+  .floatbar b{font-size:14px}
+  .floatbar span{background:var(--luna-100);color:var(--luna-900);font-size:12px;font-weight:700;padding:8px 12px;border-radius:10px}
+  .scrim{position:absolute;inset:0;background:rgba(1,28,64,.55);z-index:5}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:24px 24px 0 0;padding:12px 16px 18px;z-index:6}
+  .grab{width:38px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 12px}
+  .radio{display:flex;align-items:center;gap:10px;padding:10px;border:1.5px solid var(--line);border-radius:var(--r-md);font-size:12px}
+  .radio.on{border-color:var(--luna-500);background:var(--info-bg)}
+  .radio .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex-shrink:0}
+  .radio.on .dot{border:5px solid var(--luna-500)}
+  .alert{display:flex;gap:8px;border-radius:var(--r-md);padding:10px 12px;font-size:12px;line-height:1.45}
+  .alert.err{background:var(--danger-bg);color:var(--danger)}
+  .alert.info{background:var(--info-bg);color:var(--luna-700)}
+  .alert.warn{background:var(--warning-bg);color:var(--warning)}
+  .skel{background:linear-gradient(90deg,#E6EEF1,#F3F8FA,#E6EEF1);border-radius:8px}
+
+  /* Timeline status */
+  .timeline{position:relative;padding-left:24px}
+  .timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .tl{position:relative;margin-bottom:11px;font-size:12px}
+  .tl::before{content:"";position:absolute;left:-22px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--line)}
+  .tl.done::before{background:var(--luna-500);border-color:var(--luna-500)}
+  .tl.now::before{background:var(--luna-300);border-color:var(--luna-500);box-shadow:0 0 0 4px rgba(84,172,191,.3)}
+  .tl b{display:block}
+  .tl small{font-size:10px;color:var(--muted)}
+  .tl.todo b{color:var(--muted);font-weight:500}
+
+  /* Header gelap */
+  .hero{margin:-6px -16px 12px;padding:8px 16px 16px;background:var(--luna-700);color:#fff}
+  .hero small{color:var(--luna-100)}
+  .stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px}
+  .stat b{display:block;font-size:20px;color:var(--luna-700)}
+  .stat small{font-size:10px;color:var(--muted)}
+  .order-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px;margin-bottom:10px}
+  .order-card.new{border-left:4px solid var(--luna-500)}
+
+  @media (max-width:900px){.tokens{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page-head">
+  <h1>Send<span>Food</span> · Mockup UI/UX MVP</h1>
+  <p>Usulan visual PWA mobile-first dengan Luna Color Palette. Cakupan layar mengikuti PRD, AFD, DBD, dan <code>backend/API_CONTRACT.md</code>: checkout hanya COD, status pesanan memakai enum backend, tanpa GPS real-time, chat, dompet, voucher, atau rating.</p>
+  <div class="notice"><b>Data contoh.</b> Nama toko, menu, harga, orang, kode pesanan, dan jarak pada mockup ini adalah ilustrasi, bukan data nyata. Gambar makanan diwakili placeholder.</div>
+</header>
+
+<!-- ===================== DESIGN TOKENS ===================== -->
+<section class="group">
+  <h2>Design tokens</h2>
+  <p>Usulan token. Sesuai DBD §6, token baru final setelah mockup disetujui.</p>
+  <div class="tokens">
+    <div class="panel">
+      <h3>Luna palette</h3>
+      <div class="sw-row">
+        <div class="sw"><i style="background:#A7EBF2"></i><b>luna-100</b>#A7EBF2<br>Latar highlight, badge</div>
+        <div class="sw"><i style="background:#54ACBF"></i><b>luna-300</b>#54ACBF<br>Focus ring, dekoratif</div>
+        <div class="sw"><i style="background:#26658C"></i><b>luna-500</b>#26658C<br>Primary, tautan</div>
+        <div class="sw"><i style="background:#023859"></i><b>luna-700</b>#023859<br>Header, chip aktif</div>
+        <div class="sw"><i style="background:#011C40;border:1px solid #2b4a6b"></i><b>luna-900</b>#011C40<br>Teks utama</div>
+      </div>
+      <h3 style="margin-top:20px">Warna semantik</h3>
+      <div class="sem">
+        <span class="badge b-ok">✓ Sukses</span>
+        <span class="badge b-warn">! Peringatan</span>
+        <span class="badge b-err">✕ Error</span>
+        <span class="badge b-info">i Informasi</span>
+        <span class="badge b-mute">Netral</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Tipografi</h3>
+      <p style="font-size:22px;font-weight:800">Judul 22 / 800</p>
+      <p style="font-size:16px;font-weight:700;margin-top:6px">Subjudul 16 / 700</p>
+      <p style="font-size:14px;margin-top:6px">Body 14 / 400</p>
+      <p style="font-size:12px;margin-top:6px;opacity:.8">Label 12 / 600 · Caption 10–11</p>
+      <p style="font-size:11px;margin-top:12px;opacity:.75;line-height:1.5">Font sistem (system-ui) agar tidak ada unduhan font di jaringan lambat.</p>
+    </div>
+    <div class="panel comp">
+      <h3>Komponen dasar</h3>
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-destructive">Destructive</button>
+      <button class="btn" disabled>Disabled</button>
+      <p style="font-size:11px;opacity:.75">Tinggi minimum 44–46px, radius 14px.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PELANGGAN ===================== -->
+<section class="group">
+  <h2>Pelanggan</h2>
+  <p>Jelajah katalog tanpa login. Login diminta sebelum checkout (AFD §2).</p>
+  <div class="screens">
+
+    <!-- Beranda -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="row between">
+            <div><small class="xs muted">Antar ke</small><div class="sm bold">📍 Rumah · Jl. Melati 3 ▾</div></div>
+            <div class="icon-btn" aria-label="Keranjang">🛒</div>
+          </div>
+          <div class="input ph" style="margin-top:12px">🔍 Cari toko atau menu</div>
+          <div class="row between" style="margin-top:12px">
+            <div class="chips"><span class="chip on">Terdekat</span><span class="chip">Ongkir terendah</span><span class="chip">Termurah</span></div>
+          </div>
+          <div class="row between" style="margin-top:6px"><span class="xs muted">Urutkan · 4 toko buka</span><span class="link">Semua filter ⌄</span></div>
+
+          <div class="sec"><b>Toko di sekitarmu</b></div>
+          <div class="stack">
+            <div class="card row" style="align-items:flex-start;gap:10px">
+              <div class="ph-img" style="width:72px;height:72px">🍛</div>
+              <div style="flex:1">
+                <div class="row between"><b class="sm">Warung Bu Sari</b><span class="badge b-ok">Buka</span></div>
+                <p class="xs muted" style="margin:2px 0 6px">Nasi, lauk rumahan</p>
+                <div class="row xs" style="gap:10px"><span>📏 0,8 km</span><span>🛵 Ongkir Rp5.000</span></div>
+              </div>
+            </div>
+            <div class="card row" style="align-items:flex-start;gap:10px">
+              <div class="ph-img" style="width:72px;height:72px">🍜</div>
+              <div style="flex:1">
+                <div class="row between"><b class="sm">Mie Ayam Pak Darto</b><span class="badge b-ok">Buka</span></div>
+                <p class="xs muted" style="margin:2px 0 6px">Mie ayam, bakso</p>
+                <div class="row xs" style="gap:10px"><span>📏 1,4 km</span><span>🛵 Ongkir Rp6.000</span></div>
+              </div>
+            </div>
+            <div class="card row" style="align-items:flex-start;gap:10px;opacity:.65">
+              <div class="ph-img" style="width:72px;height:72px">🧁</div>
+              <div style="flex:1">
+                <div class="row between"><b class="sm">Kue Dapur Ana</b><span class="badge b-warn">Di luar area</span></div>
+                <p class="xs muted" style="margin:2px 0 6px">Kue basah, jajanan</p>
+                <div class="row xs" style="gap:10px"><span>📏 6,2 km</span><span>🛵 Ongkir Rp8.000</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <nav class="nav"><div class="on"><i>🏠</i>Beranda</div><div><i>🧾</i>Pesanan</div><div><i>👤</i>Akun</div></nav>
+      </div>
+      <figcaption>C1 · Beranda & daftar toko<small>Sort hanya yang didukung data: jarak, ongkir, harga. Rating disembunyikan sampai tersedia.</small></figcaption>
+    </figure>
+
+    <!-- Filter sheet -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <div class="body">
+          <div class="input ph">🔍 Cari toko atau menu</div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="row between"><b class="md">Urutkan</b><span class="link">Reset</span></div>
+          <div class="stack" style="margin-top:12px;gap:8px">
+            <div class="radio on"><span class="dot"></span>Terdekat</div>
+            <div class="radio"><span class="dot"></span>Terjauh</div>
+            <div class="radio"><span class="dot"></span>Ongkir terendah</div>
+            <div class="radio"><span class="dot"></span>Ongkir tertinggi</div>
+            <div class="radio"><span class="dot"></span>Menu termurah</div>
+            <div class="radio"><span class="dot"></span>Menu termahal</div>
+          </div>
+          <p class="xs muted" style="margin:10px 0">Jarak dihitung dari alamat pengantaran yang dipilih. “Rating tertinggi” muncul setelah fitur rating aktif.</p>
+          <button class="btn btn-primary">Terapkan</button>
+        </div>
+      </div>
+      <figcaption>C2 · Sheet urutkan<small>Opsi dari DBD §5, tanpa kontrol yang belum didukung data.</small></figcaption>
+    </figure>
+
+    <!-- Detail toko -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status" style="background:var(--luna-700);color:#fff"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="hero">
+            <div class="row" style="margin-bottom:12px"><div class="icon-btn" style="background:rgba(255,255,255,.12);border:none;color:#fff" aria-label="Kembali">‹</div></div>
+            <div class="row between"><h3 style="font-size:18px">Warung Bu Sari</h3><span class="badge b-ok">Buka</span></div>
+            <small class="sm">Jl. Kenanga 12 · 0,8 km · Ongkir Rp5.000</small>
+          </div>
+          <div class="input ph">🔍 Cari di menu toko ini</div>
+          <div class="sec"><b>Menu</b><span class="xs muted">5 tersedia</span></div>
+          <div class="stack" style="gap:0">
+            <div class="row" style="padding:10px 0;border-bottom:1px solid var(--line);gap:10px">
+              <div class="ph-img" style="width:56px;height:56px;font-size:24px">🍛</div>
+              <div style="flex:1"><b class="sm">Nasi Goreng Telur</b><p class="xs muted">Nasi goreng, telur ceplok</p><b class="sm" style="color:var(--luna-500)">Rp15.000</b></div>
+              <div class="stepper"><span aria-label="Kurangi">−</span>2<span class="p" aria-label="Tambah">+</span></div>
+            </div>
+            <div class="row" style="padding:10px 0;border-bottom:1px solid var(--line);gap:10px">
+              <div class="ph-img" style="width:56px;height:56px;font-size:24px">🍗</div>
+              <div style="flex:1"><b class="sm">Ayam Goreng + Nasi</b><p class="xs muted">Paha atas, sambal</p><b class="sm" style="color:var(--luna-500)">Rp18.000</b></div>
+              <div class="add">Tambah</div>
+            </div>
+            <div class="row" style="padding:10px 0;gap:10px">
+              <div class="ph-img" style="width:56px;height:56px;font-size:24px">🧊</div>
+              <div style="flex:1"><b class="sm">Es Teh Manis</b><p class="xs muted">Gelas besar</p><b class="sm" style="color:var(--luna-500)">Rp5.000</b></div>
+              <div class="stepper"><span>−</span>1<span class="p">+</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="floatbar"><div><small>3 item · Warung Bu Sari</small><b>Rp35.000</b></div><span>Keranjang ›</span></div>
+      </div>
+      <figcaption>C3 · Detail toko & menu<small>Hanya produk <code>is_available</code> yang tampil. Bar keranjang selalu terlihat.</small></figcaption>
+    </figure>
+
+    <!-- Checkout -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn" aria-label="Kembali">‹</div><h3>Checkout</h3></div>
+          <div class="card" style="margin-bottom:10px">
+            <div class="row between"><b class="sm">Alamat pengantaran</b><span class="link">Ubah</span></div>
+            <p class="sm" style="margin-top:4px">Jl. Melati 3, RT 02/RW 01, rumah pagar hijau</p>
+            <div class="input ph sm" style="margin-top:8px;min-height:38px">Catatan untuk driver (opsional)</div>
+          </div>
+          <div class="card" style="margin-bottom:10px">
+            <b class="sm">Warung Bu Sari</b>
+            <div class="money" style="margin-top:6px"><span>2× Nasi Goreng Telur</span><span>Rp30.000</span></div>
+            <div class="money"><span>1× Es Teh Manis</span><span>Rp5.000</span></div>
+          </div>
+          <div class="card" style="margin-bottom:10px">
+            <b class="sm">Pembayaran</b>
+            <div class="radio on" style="margin-top:8px"><span class="dot"></span><div><b>Bayar di tempat (COD)</b><br><span class="xs muted">Bayar tunai ke driver saat pesanan diterima</span></div></div>
+          </div>
+          <div class="money"><span class="muted">Subtotal</span><span>Rp35.000</span></div>
+          <div class="money"><span class="muted">Ongkir</span><span>Rp5.000</span></div>
+          <div class="money total"><span>Total</span><span>Rp40.000</span></div>
+          <button class="btn btn-primary" style="margin-top:8px">Buat Pesanan · Rp40.000</button>
+        </div>
+      </div>
+      <figcaption>C4 · Keranjang & checkout<small>Hanya COD. Transfer manual tidak ditampilkan sampai alur verifikasi diputuskan. Total final dihitung ulang backend.</small></figcaption>
+    </figure>
+
+    <!-- Status pesanan -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:58</span><span>▮▮▮ 78%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn" aria-label="Kembali">‹</div><h3>Status pesanan</h3></div>
+          <div class="card" style="background:var(--luna-700);color:#fff;border:none">
+            <small class="xs" style="color:var(--luna-100)">SF-8F3A21C9D0 · Warung Bu Sari</small>
+            <div class="row between" style="margin-top:4px"><b class="md">Sedang diantar</b><span class="badge b-aqua">🛵 picked_up</span></div>
+            <p class="xs" style="color:var(--luna-100);margin-top:4px">Driver sudah mengambil pesananmu.</p>
+          </div>
+          <div class="card row" style="margin:10px 0">
+            <div class="ph-img" style="width:38px;height:38px;border-radius:50%;font-size:18px">🧑</div>
+            <div style="flex:1"><b class="sm">Driver sudah ditugaskan</b><p class="xs muted">Nama/kontak driver tampil jika kontrak API mengizinkan</p></div>
+          </div>
+          <div class="timeline">
+            <div class="tl done"><b>Menunggu konfirmasi toko</b><small>09:40</small></div>
+            <div class="tl done"><b>Diterima toko</b><small>09:42</small></div>
+            <div class="tl done"><b>Sedang disiapkan</b><small>09:43</small></div>
+            <div class="tl done"><b>Siap diambil</b><small>09:52</small></div>
+            <div class="tl now"><b>Sedang diantar</b><small>09:55</small></div>
+            <div class="tl todo"><b>Sampai di tujuan</b></div>
+            <div class="tl todo"><b>Selesai</b></div>
+          </div>
+          <div class="money total" style="margin-top:0"><span>Total · COD, belum dibayar</span><span>Rp40.000</span></div>
+        </div>
+      </div>
+      <figcaption>C5 · Status pesanan<small>Timeline dari <code>order_status_history</code>. Tanpa peta atau estimasi waktu.</small></figcaption>
+    </figure>
+
+    <!-- Konfirmasi diterima -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>10:07</span><span>▮▮▮ 77%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn">‹</div><h3>Status pesanan</h3></div>
+          <div class="card" style="text-align:center;padding:22px 14px">
+            <div style="font-size:44px">📦</div>
+            <b class="md" style="display:block;margin-top:6px">Pesanan sudah sampai</b>
+            <p class="sm muted" style="margin-top:4px">Driver menandai pesanan terkirim. Bayar <b>Rp40.000</b> tunai ke driver, lalu konfirmasi.</p>
+            <span class="badge b-info" style="margin-top:10px">delivered</span>
+          </div>
+          <div style="margin-top:14px" class="stack">
+            <button class="btn btn-primary">Ya, pesanan sudah saya terima</button>
+            <button class="btn btn-secondary">Ada masalah? Hubungi admin</button>
+          </div>
+          <div class="alert info" style="margin-top:14px">ℹ Konfirmasi mengubah status menjadi <b>&nbsp;Selesai</b>. Konvensi sementara sesuai kontrak API.</div>
+        </div>
+      </div>
+      <figcaption>C6 · Konfirmasi penerimaan<small><code>delivered → completed</code> oleh pelanggan.</small></figcaption>
+    </figure>
+
+    <!-- Riwayat -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>10:10</span><span>▮▮▮ 77%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><h3 style="font-size:18px">Pesanan saya</h3></div>
+          <div class="chips" style="margin-bottom:12px"><span class="chip on">Aktif (1)</span><span class="chip">Riwayat</span></div>
+          <div class="order-card">
+            <div class="row between"><b class="sm">Mie Ayam Pak Darto</b><span class="badge b-warn">⏳ Menunggu toko</span></div>
+            <p class="xs muted" style="margin:3px 0">SF-C21B7740AA · 2 item</p>
+            <div class="row between"><span class="sm bold">Rp32.000</span><span class="link">Lihat status ›</span></div>
+          </div>
+          <p class="xs muted bold" style="margin:14px 0 8px;letter-spacing:1px">RIWAYAT</p>
+          <div class="order-card">
+            <div class="row between"><b class="sm">Warung Bu Sari</b><span class="badge b-ok">✓ Selesai</span></div>
+            <p class="xs muted" style="margin:3px 0">SF-8F3A21C9D0 · 3 item · 7 Nov</p>
+            <span class="sm bold">Rp40.000</span>
+          </div>
+          <div class="order-card">
+            <div class="row between"><b class="sm">Kue Dapur Ana</b><span class="badge b-err">✕ Ditolak toko</span></div>
+            <p class="xs muted" style="margin:3px 0">SF-11E09ABF42 · 1 item · 5 Nov</p>
+            <p class="xs" style="color:var(--danger)">Alasan: stok kue habis hari ini</p>
+          </div>
+        </div>
+        <nav class="nav"><div><i>🏠</i>Beranda</div><div class="on"><i>🧾</i>Pesanan</div><div><i>👤</i>Akun</div></nav>
+      </div>
+      <figcaption>C7 · Pesanan & riwayat<small>Status memakai badge berwarna + ikon + teks, tidak hanya warna.</small></figcaption>
+    </figure>
+
+    <!-- Login -->
+    <figure class="shot">
+      <div class="phone">
+        <div class="status" style="background:var(--luna-700);color:#fff"><span>09:39</span><span>▮▮▮ 80%</span></div>
+        <div class="body">
+          <div class="hero" style="padding:16px 16px 26px;border-radius:0 0 28px 28px">
+            <div style="width:52px;height:52px;border-radius:16px;background:var(--luna-100);display:grid;place-items:center;font-size:26px">🛵</div>
+            <h2 style="margin-top:14px;font-size:20px">Masuk untuk lanjut pesan</h2>
+            <small class="sm">Keranjangmu tetap tersimpan.</small>
+          </div>
+          <div class="stack" style="gap:12px">
+            <div class="field"><label for="em">Email</label><div class="input focus" id="em">nama@email.com</div></div>
+            <div class="field"><label for="pw">Kata sandi</label><div class="input err" id="pw">••••</div><span class="hint err">Kata sandi minimal 8 karakter.</span></div>
+            <button class="btn btn-primary">Masuk</button>
+            <p class="sm" style="text-align:center">Belum punya akun? <span class="link">Daftar</span></p>
+            <span class="link sm" style="text-align:center">Lupa kata sandi</span>
+          </div>
+        </div>
+      </div>
+      <figcaption>C8 · Login / daftar<small>Supabase Auth. Akun baru selalu berperan pelanggan; peran lain diatur operator.</small></figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== STATE ===================== -->
+<section class="group">
+  <h2>Loading, empty, dan error state</h2>
+  <p>Wajib di semua alur (AFD §7, TRD §4). Pesan error RPC dipetakan ke bahasa yang ramah; keranjang tidak dihapus saat checkout gagal.</p>
+  <div class="screens">
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <div class="body">
+          <div class="skel" style="height:36px;width:60%"></div>
+          <div class="skel" style="height:44px;margin-top:12px;border-radius:14px"></div>
+          <div class="row" style="margin-top:12px"><div class="skel" style="height:30px;width:80px;border-radius:20px"></div><div class="skel" style="height:30px;width:100px;border-radius:20px"></div></div>
+          <div class="stack" style="margin-top:18px">
+            <div class="card row"><div class="skel" style="width:72px;height:72px;border-radius:14px"></div><div style="flex:1" class="stack"><div class="skel" style="height:12px;width:70%"></div><div class="skel" style="height:10px;width:50%"></div><div class="skel" style="height:10px;width:80%"></div></div></div>
+            <div class="card row"><div class="skel" style="width:72px;height:72px;border-radius:14px"></div><div style="flex:1" class="stack"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div><div class="skel" style="height:10px;width:75%"></div></div></div>
+          </div>
+        </div>
+      </div>
+      <figcaption>S1 · Loading (skeleton)</figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <div class="body" style="display:flex;flex-direction:column;justify-content:center;text-align:center;align-items:center">
+          <div class="ph-img" style="width:110px;height:110px;border-radius:50%;font-size:48px">🍽</div>
+          <b class="md" style="margin-top:14px">Belum ada toko yang buka</b>
+          <p class="sm muted" style="margin:6px 0 16px">Toko di sekitar alamatmu sedang tutup atau belum terdaftar. Coba lagi nanti atau ganti alamat.</p>
+          <button class="btn btn-secondary">Ganti alamat</button>
+        </div>
+      </div>
+      <figcaption>S2 · Empty state</figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn">‹</div><h3>Checkout</h3></div>
+          <div class="alert err"><span>✕</span><div><b>Alamat di luar jangkauan toko</b><br>Warung Bu Sari hanya mengantar dalam radius tertentu. Pilih alamat lain atau toko lain. Keranjangmu tetap tersimpan.</div></div>
+          <div class="card" style="margin-top:10px"><div class="row between"><b class="sm">Alamat pengantaran</b><span class="badge b-err">Perlu diubah</span></div><p class="sm" style="margin-top:4px">Dusun Krajan, 7 km dari toko</p></div>
+          <div class="stack" style="margin-top:12px"><button class="btn btn-primary">Ganti alamat</button><button class="btn btn-secondary">Cari toko lain</button></div>
+        </div>
+      </div>
+      <figcaption>S3 · Error checkout<small><code>outside_store_service_radius</code>. Pemetaan error lain ada di bagian aturan.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <div class="body">
+          <div class="alert warn"><span>⚠</span><div><b>Koneksi terputus</b><br>Menampilkan data terakhir. Kami akan mencoba lagi otomatis.</div></div>
+          <div class="card" style="margin-top:12px;opacity:.6"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%;margin-top:8px"></div></div>
+          <div style="margin-top:12px"><button class="btn btn-secondary">Coba lagi</button></div>
+          <div style="position:absolute;left:16px;right:16px;bottom:20px" class="alert info"><span>✓</span><div><b>Pesanan dibuat</b><br>Kode SF-8F3A21C9D0. Menunggu konfirmasi toko.</div></div>
+        </div>
+      </div>
+      <figcaption>S4 · Offline & success toast</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== PENJUAL ===================== -->
+<section class="group">
+  <h2>Penjual</h2>
+  <p>Dashboard berorientasi tindakan: pesanan baru di atas, transisi status sesuai kontrak.</p>
+  <div class="screens">
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status" style="background:var(--luna-700);color:#fff"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="hero"><small class="xs">Dashboard penjual</small><h3 style="font-size:18px">Warung Bu Sari</h3></div>
+          <div class="row" style="gap:8px">
+            <div class="stat"><b>2</b><small>Pesanan baru</small></div>
+            <div class="stat"><b>1</b><small>Disiapkan</small></div>
+            <div class="stat"><b>1</b><small>Siap diambil</small></div>
+          </div>
+          <div class="chips" style="margin:12px 0"><span class="chip on">Baru (2)</span><span class="chip">Diproses</span><span class="chip">Siap</span><span class="chip">Selesai</span></div>
+          <div class="order-card new">
+            <div class="row between"><b class="sm">SF-C21B7740AA</b><span class="badge b-warn">⏳ Baru</span></div>
+            <p class="xs muted" style="margin:3px 0 6px">2× Nasi Goreng Telur · 1× Es Teh · COD</p>
+            <div class="row between sm"><span class="muted">Total</span><b>Rp40.000</b></div>
+            <div class="row" style="margin-top:10px"><button class="btn btn-destructive btn-sm">Tolak</button><button class="btn btn-primary btn-sm">Terima</button></div>
+          </div>
+          <div class="order-card new">
+            <div class="row between"><b class="sm">SF-07DD1E2B93</b><span class="badge b-warn">⏳ Baru</span></div>
+            <p class="xs muted" style="margin:3px 0 6px">1× Ayam Goreng + Nasi · COD</p>
+            <div class="row between sm"><span class="muted">Total</span><b>Rp23.000</b></div>
+          </div>
+        </div>
+        <nav class="nav"><div class="on"><i>📋</i>Pesanan</div><div><i>🍱</i>Produk</div><div><i>🏪</i>Toko</div></nav>
+      </div>
+      <figcaption>P1 · Dashboard & pesanan masuk<small><code>pending_seller</code> → Terima / Tolak.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn">‹</div><h3>SF-C21B7740AA</h3></div>
+          <div class="card"><p class="sm">2× Nasi Goreng Telur</p><p class="sm">1× Es Teh Manis</p></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <b class="md">Tolak pesanan ini?</b>
+          <p class="sm muted" style="margin:4px 0 12px">Pelanggan akan melihat alasan penolakan. Tindakan ini tidak bisa dibatalkan.</p>
+          <div class="chips" style="flex-wrap:wrap;margin-bottom:10px"><span class="chip on">Stok habis</span><span class="chip">Toko akan tutup</span><span class="chip">Lainnya</span></div>
+          <div class="field"><label>Alasan (wajib)</label><div class="input focus">Nasi goreng habis untuk hari ini</div></div>
+          <div class="row" style="margin-top:14px"><button class="btn btn-secondary">Batal</button><button class="btn btn-destructive" style="background:var(--danger);color:#fff">Tolak</button></div>
+        </div>
+      </div>
+      <figcaption>P2 · Konfirmasi tolak<small>Alasan wajib untuk <code>rejected</code>.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:50</span><span>▮▮▮ 79%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn">‹</div><h3>SF-C21B7740AA</h3></div>
+          <div class="row between"><span class="badge b-info">🍳 Sedang disiapkan</span><span class="xs muted">Diterima 09:42</span></div>
+          <div class="card" style="margin-top:10px">
+            <div class="money"><span>2× Nasi Goreng Telur</span><span>Rp30.000</span></div>
+            <div class="money"><span>1× Es Teh Manis</span><span>Rp5.000</span></div>
+            <div class="money"><span class="muted">Ongkir</span><span>Rp5.000</span></div>
+            <div class="money total"><span>Total · COD</span><span>Rp40.000</span></div>
+          </div>
+          <div class="card" style="margin-top:10px"><b class="sm">Catatan pelanggan</b><p class="sm muted" style="margin-top:3px">Rumah pagar hijau</p></div>
+          <div class="card" style="margin-top:10px"><div class="row between"><b class="sm">Driver</b><span class="badge b-mute">Belum ditugaskan</span></div><p class="xs muted" style="margin-top:3px">Admin akan menugaskan driver.</p></div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn btn-primary">Tandai siap diambil</button></div>
+        </div>
+      </div>
+      <figcaption>P3 · Detail pesanan<small>Satu tombol besar untuk transisi berikutnya: <code>preparing → ready_for_pickup</code>.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:41</span><span>▮▮▮ 80%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="row between" style="margin:2px 0 12px"><h3 style="font-size:18px">Produk</h3><button class="btn btn-primary btn-sm" style="width:auto;padding:0 12px">+ Tambah</button></div>
+          <div class="input ph">🔍 Cari produk</div>
+          <div class="stack" style="margin-top:12px">
+            <div class="card row"><div class="ph-img" style="width:48px;height:48px;font-size:22px">🍛</div><div style="flex:1"><b class="sm">Nasi Goreng Telur</b><p class="xs muted">Rp15.000 · Tersedia</p></div><div class="toggle on" role="switch" aria-checked="true" aria-label="Tersedia"></div></div>
+            <div class="card row"><div class="ph-img" style="width:48px;height:48px;font-size:22px">🍗</div><div style="flex:1"><b class="sm">Ayam Goreng + Nasi</b><p class="xs muted">Rp18.000 · Tersedia</p></div><div class="toggle on" role="switch" aria-checked="true"></div></div>
+            <div class="card row" style="opacity:.75"><div class="ph-img" style="width:48px;height:48px;font-size:22px">🥘</div><div style="flex:1"><b class="sm">Rendang</b><p class="xs" style="color:var(--warning)">Rp22.000 · Habis, tidak tampil</p></div><div class="toggle" role="switch" aria-checked="false"></div></div>
+            <div class="card row"><div class="ph-img" style="width:48px;height:48px;font-size:22px">🧊</div><div style="flex:1"><b class="sm">Es Teh Manis</b><p class="xs muted">Rp5.000 · Tersedia</p></div><div class="toggle on" role="switch" aria-checked="true"></div></div>
+          </div>
+        </div>
+        <nav class="nav"><div><i>📋</i>Pesanan</div><div class="on"><i>🍱</i>Produk</div><div><i>🏪</i>Toko</div></nav>
+      </div>
+      <figcaption>P4 · Kelola produk<small>Toggle <code>is_available</code>. Ongkir dan radius toko tidak bisa diubah penjual.</small></figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== DRIVER ===================== -->
+<section class="group">
+  <h2>Driver</h2>
+  <p>Hanya tugas yang ditugaskan ke driver tersebut. Tombol status besar, satu aksi per tahap.</p>
+  <div class="screens">
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status" style="background:var(--luna-700);color:#fff"><span>09:52</span><span>▮▮▮ 65%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="hero"><small class="xs">Halo, Andi</small><h3 style="font-size:18px">Tugas aktif (1)</h3></div>
+          <div class="order-card new">
+            <div class="row between"><b class="sm">SF-8F3A21C9D0</b><span class="badge b-ok">📦 Siap diambil</span></div>
+            <div class="divider"></div>
+            <p class="xs muted bold">AMBIL DI</p>
+            <p class="sm"><b>Warung Bu Sari</b><br>Jl. Kenanga 12</p>
+            <p class="xs muted bold" style="margin-top:8px">ANTAR KE</p>
+            <p class="sm">Jl. Melati 3, RT 02/RW 01<br><span class="muted xs">Catatan: rumah pagar hijau</span></p>
+            <div class="divider"></div>
+            <div class="row between sm"><span>Tagih COD</span><b style="font-size:16px">Rp40.000</b></div>
+          </div>
+          <p class="xs muted bold" style="margin:12px 0 6px;letter-spacing:1px">SELANJUTNYA</p>
+          <div class="order-card"><div class="row between"><b class="sm">SF-07DD1E2B93</b><span class="badge b-info">🍳 Disiapkan</span></div><p class="xs muted" style="margin-top:3px">Warung Bu Sari → Jl. Anggrek 8</p></div>
+          <div style="position:absolute;left:16px;right:16px;bottom:14px"><button class="btn btn-primary" style="min-height:54px;font-size:15px">Saya sudah ambil pesanan</button></div>
+        </div>
+        <nav class="nav"><div class="on"><i>🛵</i>Tugas</div><div><i>🕘</i>Riwayat</div><div><i>👤</i>Akun</div></nav>
+      </div>
+      <figcaption>D1 · Tugas aktif<small><code>ready_for_pickup → picked_up</code>. Tombol baru aktif saat toko menandai siap.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>10:05</span><span>▮▮▮ 62%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><div class="icon-btn">‹</div><h3>SF-8F3A21C9D0</h3></div>
+          <span class="badge b-aqua">🛵 Sedang diantar</span>
+          <div class="card" style="margin-top:10px">
+            <p class="xs muted bold">ANTAR KE</p>
+            <p class="md bold" style="margin:2px 0">Jl. Melati 3, RT 02/RW 01</p>
+            <p class="sm muted">Rumah pagar hijau</p>
+            <div class="row" style="margin-top:10px"><button class="btn btn-secondary btn-sm">🗺 Buka di aplikasi peta</button></div>
+          </div>
+          <div class="card" style="margin-top:10px">
+            <div class="money"><span>2× Nasi Goreng Telur</span></div>
+            <div class="money"><span>1× Es Teh Manis</span></div>
+            <div class="money total"><span>Tagih tunai</span><span>Rp40.000</span></div>
+          </div>
+          <div class="alert info" style="margin-top:10px">ℹ Tandai terkirim setelah pesanan diserahkan dan uang COD diterima.</div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn btn-primary" style="min-height:54px;font-size:15px">Pesanan sudah diserahkan</button></div>
+        </div>
+      </div>
+      <figcaption>D2 · Detail pengantaran<small><code>picked_up → delivered</code>. Tautan ke aplikasi peta eksternal, bukan tracking real-time.</small></figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== ADMIN ===================== -->
+<section class="group">
+  <h2>Admin</h2>
+  <p>Daftar berbentuk kartu di ponsel. Assignment driver sementara hanya admin.</p>
+  <div class="screens">
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status" style="background:var(--luna-900);color:#fff"><span>09:45</span><span>▮▮▮ 90%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="hero" style="background:var(--luna-900)"><small class="xs">Admin</small><h3 style="font-size:18px">Ringkasan hari ini</h3></div>
+          <div class="row" style="gap:8px">
+            <div class="stat"><b>6</b><small>Pesanan aktif</small></div>
+            <div class="stat"><b style="color:var(--warning)">2</b><small>Perlu driver</small></div>
+          </div>
+          <div class="row" style="gap:8px;margin-top:8px">
+            <div class="stat"><b>4</b><small>Toko aktif</small></div>
+            <div class="stat"><b>3</b><small>Driver</small></div>
+          </div>
+          <div class="sec"><b>Perlu driver</b><span class="link">Semua</span></div>
+          <div class="order-card new">
+            <div class="row between"><b class="sm">SF-07DD1E2B93</b><span class="badge b-info">🍳 Disiapkan</span></div>
+            <p class="xs muted" style="margin:3px 0 8px">Warung Bu Sari → Jl. Anggrek 8</p>
+            <button class="btn btn-primary btn-sm">Tugaskan driver</button>
+          </div>
+          <div class="alert warn xs">⚠ 1 toko belum punya ongkir/radius/koordinat sehingga checkout ditolak.</div>
+        </div>
+        <nav class="nav"><div class="on"><i>📊</i>Ringkasan</div><div><i>🧾</i>Pesanan</div><div><i>🏪</i>Toko</div><div><i>👥</i>Pengguna</div></nav>
+      </div>
+      <figcaption>A1 · Ringkasan operasional<small>Angka hitungan saja, tanpa grafik (DBD §9).</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:45</span><span>▮▮▮ 90%</span></div>
+        <div class="body"><div class="topbar"><div class="icon-btn">‹</div><h3>SF-07DD1E2B93</h3></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <span class="demo-tag" style="top:12px">DATA CONTOH</span>
+          <div class="grab"></div>
+          <b class="md">Pilih driver</b>
+          <p class="xs muted" style="margin:3px 0 12px">Hanya akun ber-role driver yang muncul.</p>
+          <div class="stack" style="gap:8px">
+            <div class="radio on"><span class="dot"></span><div style="flex:1"><b>Andi</b><br><span class="xs muted">1 tugas aktif</span></div></div>
+            <div class="radio"><span class="dot"></span><div style="flex:1"><b>Budi</b><br><span class="xs muted">Tidak ada tugas aktif</span></div></div>
+            <div class="radio"><span class="dot"></span><div style="flex:1"><b>Citra</b><br><span class="xs muted">Tidak ada tugas aktif</span></div></div>
+          </div>
+          <div class="row" style="margin-top:14px"><button class="btn btn-secondary">Batal</button><button class="btn btn-primary">Tugaskan</button></div>
+        </div>
+      </div>
+      <figcaption>A2 · Tugaskan driver<small><code>assign_order_driver</code>, untuk status accepted / preparing / ready_for_pickup.</small></figcaption>
+    </figure>
+
+    <figure class="shot">
+      <div class="phone">
+        <div class="status"><span>09:45</span><span>▮▮▮ 90%</span></div>
+        <span class="demo-tag">DATA CONTOH</span>
+        <div class="body">
+          <div class="topbar"><h3 style="font-size:18px">Pengguna</h3></div>
+          <div class="input ph">🔍 Cari nama atau email</div>
+          <div class="chips" style="margin:10px 0"><span class="chip on">Semua</span><span class="chip">Penjual</span><span class="chip">Driver</span><span class="chip">Pelanggan</span></div>
+          <div class="stack">
+            <div class="card row"><div class="ph-img" style="width:38px;height:38px;border-radius:50%;font-size:16px">👩</div><div style="flex:1"><b class="sm">Sari Wulandari</b><p class="xs muted">sari@contoh.id</p></div><span class="badge b-aqua">seller</span></div>
+            <div class="card row"><div class="ph-img" style="width:38px;height:38px;border-radius:50%;font-size:16px">🧑</div><div style="flex:1"><b class="sm">Andi</b><p class="xs muted">andi@contoh.id</p></div><span class="badge b-info">driver</span></div>
+            <div class="card row"><div class="ph-img" style="width:38px;height:38px;border-radius:50%;font-size:16px">👤</div><div style="flex:1"><b class="sm">Rina</b><p class="xs muted">rina@contoh.id</p></div><span class="badge b-mute">customer</span></div>
+          </div>
+          <div class="alert info xs" style="margin-top:12px">ℹ Perubahan role dilakukan lewat lingkungan tepercaya, bukan dari aplikasi ini.</div>
+        </div>
+        <nav class="nav"><div><i>📊</i>Ringkasan</div><div><i>🧾</i>Pesanan</div><div><i>🏪</i>Toko</div><div class="on"><i>👥</i>Pengguna</div></nav>
+      </div>
+      <figcaption>A3 · Daftar pengguna<small>Baca saja. Role tidak dapat diubah dari client.</small></figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== ATURAN ===================== -->
+<section class="group">
+  <h2>Aturan pemakaian</h2>
+  <p>Ringkasan keputusan desain untuk ditinjau pemilik frontend.</p>
+  <div class="rules">
+    <div class="panel">
+      <h3>Warna & kontras</h3>
+      <ul>
+        <li><b>#26658C</b> di atas putih dipakai untuk tombol dan tautan (rasio kontras sekitar 6:1).</li>
+        <li><b>#011C40</b> untuk teks utama.</li>
+        <li><b>#A7EBF2</b> dan <b>#54ACBF</b> hanya untuk latar atau dekorasi. Jangan dipakai untuk teks kecil di atas putih karena kontrasnya rendah.</li>
+        <li>Status selalu memakai ikon dan teks, bukan warna saja.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Label status pesanan</h3>
+      <ul>
+        <li><code>pending_seller</code> Menunggu konfirmasi toko</li>
+        <li><code>accepted</code> Diterima toko · <code>rejected</code> Ditolak toko</li>
+        <li><code>preparing</code> Sedang disiapkan</li>
+        <li><code>ready_for_pickup</code> Siap diambil</li>
+        <li><code>picked_up</code> Sedang diantar · <code>delivered</code> Sampai di tujuan</li>
+        <li><code>completed</code> Selesai</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Pemetaan error RPC (usulan teks)</h3>
+      <ul>
+        <li><code>outside_store_service_radius</code> Alamat di luar jangkauan toko.</li>
+        <li><code>store_delivery_not_configured</code> Toko ini belum menerima pesanan antar.</li>
+        <li><code>store_not_available</code> Toko sedang tidak tersedia.</li>
+        <li><code>product_unavailable_or_wrong_store</code> Ada menu yang habis. Periksa keranjang.</li>
+        <li><code>authentication_required</code> Masuk dulu untuk melanjutkan.</li>
+        <li><code>status_transition_not_allowed</code> Status pesanan sudah berubah. Muat ulang halaman.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Belum ditampilkan</h3>
+      <ul>
+        <li>Transfer manual (<code>manual_transfer_not_configured</code>).</li>
+        <li>Tombol batal pesanan (<code>cancellation_policy_not_configured</code>).</li>
+        <li>Rating, voucher, dompet, chat, GPS real-time (di luar MVP).</li>
+        <li>Estimasi waktu antar dan jam buka, karena belum ada datanya.</li>
+        <li>Kategori menu, karena belum ada kolom kategori di <code>products</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
