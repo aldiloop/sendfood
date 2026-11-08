@@ -9,6 +9,26 @@
 -- * No rating tables or fields (rating is P2 and deferred).
 -- * Supabase default privileges grant execute/table access to anon/authenticated/
 --   service_role, so every new object below revokes explicitly and re-grants minimally.
+-- * Atomic and fail-fast on every apply path: the whole file is one explicit transaction
+--   (BEGIN ... COMMIT), so a failure anywhere rolls back schema, catalog and data even when run
+--   with plain `psql -f` or pasted into an SQL editor. Always use ON_ERROR_STOP with psql.
+--   lock_timeout makes it fail instead of queueing behind long-held locks on a live database.
+
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '120s';
+
+do $$
+begin
+  if to_regclass('auth.users') is null then
+    raise exception using errcode = 'P0001', message = 'hardening_requires_supabase_auth_schema';
+  end if;
+  if to_regclass('public.profiles') is null or to_regclass('public.orders') is null
+     or to_regclass('public.products') is null then
+    raise exception using errcode = 'P0001', message = 'hardening_requires_foundation_migration';
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 1. Operational policy table (trusted write only) and audit log
@@ -150,6 +170,24 @@ create trigger stores_guard_update
 alter table public.products drop constraint if exists products_price_not_nan;
 alter table public.products add constraint products_price_not_nan
   check (price <> 'NaN'::numeric);
+-- Same for every other money/radius column (foundation only checks >= 0, which NaN passes; NaN = NaN is
+-- also true, so total = subtotal + delivery_fee does not catch it). Infinity cannot be stored in these
+-- typmod-constrained numeric columns, so NaN is the only non-finite value to exclude. Coordinates are
+-- already safe: their foundation range checks (between -90 and 90 etc.) are false for NaN.
+-- Legacy NaN rows make these ADD CONSTRAINTs fail (SQLSTATE 23514) and the whole migration roll back;
+-- they are never rewritten automatically (see backend/README.md preflight).
+alter table public.stores drop constraint if exists stores_delivery_fee_not_nan;
+alter table public.stores add constraint stores_delivery_fee_not_nan
+  check (delivery_fee is null or delivery_fee <> 'NaN'::numeric);
+alter table public.stores drop constraint if exists stores_service_radius_not_nan;
+alter table public.stores add constraint stores_service_radius_not_nan
+  check (service_radius_km is null or service_radius_km <> 'NaN'::numeric);
+alter table public.orders drop constraint if exists orders_amounts_not_nan;
+alter table public.orders add constraint orders_amounts_not_nan
+  check (subtotal <> 'NaN'::numeric and delivery_fee <> 'NaN'::numeric and total <> 'NaN'::numeric);
+alter table public.order_items drop constraint if exists order_items_amounts_not_nan;
+alter table public.order_items add constraint order_items_amounts_not_nan
+  check (unit_price_snapshot <> 'NaN'::numeric and line_total <> 'NaN'::numeric);
 revoke insert, update on public.products from authenticated;
 grant insert (store_id, name, description, price, image_url, is_available) on public.products to authenticated;
 grant update (name, description, price, image_url, is_available) on public.products to authenticated;
@@ -337,6 +375,7 @@ begin
   select q.id, q.name, q.description, q.address, q.latitude, q.longitude, q.phone, q.image_url,
          q.opening_hours, q.delivery_fee, q.service_radius_km, q.dist,
          case when q.dist is null or q.service_radius_km is null then null
+              when q.dist = 'NaN'::double precision or q.service_radius_km = 'NaN'::numeric then null
               else q.dist <= q.service_radius_km::double precision end
   from (
     select s.id, s.name, s.description, s.address, s.latitude, s.longitude, s.phone, s.image_url,
@@ -391,6 +430,7 @@ begin
   select q.id, q.store_id, q.store_name, q.name, q.description, q.price, q.image_url,
          q.delivery_fee, q.service_radius_km, q.dist,
          case when q.dist is null or q.service_radius_km is null then null
+              when q.dist = 'NaN'::double precision or q.service_radius_km = 'NaN'::numeric then null
               else q.dist <= q.service_radius_km::double precision end
   from (
     select p.id, p.store_id, s.name as store_name, p.name, p.description, p.price, p.image_url,
@@ -624,12 +664,16 @@ begin
   if not found then
     raise exception using errcode = 'P0001', message = 'store_not_available';
   end if;
-  if v_store_fee is null or v_radius is null or v_store_lat is null or v_store_lon is null then
+  -- NaN fee/radius (legacy or bypassed rows) count as not configured: NaN would make the total NaN
+  -- and `distance > NaN` is false, which would silently skip the radius check.
+  if v_store_fee is null or v_radius is null or v_store_lat is null or v_store_lon is null
+     or v_store_fee = 'NaN'::numeric or v_store_fee < 0 or v_radius = 'NaN'::numeric or v_radius <= 0
+     or v_store_lat = 'NaN'::numeric or v_store_lon = 'NaN'::numeric then
     raise exception using errcode = 'P0001', message = 'store_delivery_not_configured';
   end if;
 
   v_distance_km := public.haversine_km(v_store_lat, v_store_lon, p_delivery_latitude, p_delivery_longitude);
-  if v_distance_km > v_radius then
+  if v_distance_km is null or v_distance_km = 'NaN'::double precision or v_distance_km > v_radius then
     raise exception using errcode = 'P0001', message = 'outside_store_service_radius';
   end if;
 
@@ -691,6 +735,9 @@ begin
     raise exception using errcode = 'P0001', message = 'order_subtotal_unavailable';
   end if;
   v_total := (v_subtotal + v_store_fee)::numeric(12,2);
+  if v_subtotal = 'NaN'::numeric or v_total = 'NaN'::numeric or v_total < 0 then
+    raise exception using errcode = 'P0001', message = 'order_subtotal_unavailable';
+  end if;
 
   insert into public.orders as created_order (
     customer_id, store_id, delivery_address, delivery_latitude, delivery_longitude,
@@ -1145,3 +1192,5 @@ grant execute on function public.provision_set_policy(text, text) to service_rol
 comment on table public.ops_policy is 'Operational policy flags. Writable only through provision_set_policy (service_role/postgres). Fail-closed defaults.';
 comment on function public.provision_set_user_role(uuid, public.app_role, text) is 'Trusted-only role provisioning (service_role/postgres). Not callable by anon/authenticated.';
 comment on function public.record_cod_collection(uuid, text) is 'Explicit COD collection record; fails closed until cod_collection policy is configured. Delivered/completed never implies paid.';
+
+commit;

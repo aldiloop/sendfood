@@ -1,21 +1,22 @@
 # Checklist gap MVP backend SendFood
 
-Status per akhir pekerjaan branch `backend-mvp-hardening`. Dasar: prioritas P0/P1/P2 di [PRD](../docs/specs/PRD.md).
+Status per 2026-11-08, branch `backend-mvp-hardening`. Dasar: prioritas P0/P1/P2 di [PRD](../docs/specs/PRD.md). Bukti tes: [TEST_EVIDENCE.md](TEST_EVIDENCE.md).
 
-**Kesimpulan jujur: MVP/PWA BELUM siap pilot.** Frontend/PWA belum ada di repository ini, migrasi hardening belum diterapkan ke Supabase mana pun, dan enam keputusan bisnis di bawah belum diputuskan. Yang sudah diuji hanya backend pada Postgres lokal sekali pakai (bukan Supabase sungguhan, bukan PostgREST/Auth asli).
+**Kesimpulan jujur: MVP/PWA BELUM siap pilot atau produksi.** Frontend/PWA belum ada, migrasi hardening belum diterapkan ke Supabase mana pun, audit NaN live untuk kolom baru belum dilakukan, Supabase Storage belum tersedia/teruji, dan enam keputusan bisnis belum diputuskan. Backend lulus tes **secara lokal** (Postgres lokal dan tumpukan Supabase Auth/GoTrue + PostgREST nyata); itu bukan Supabase cloud, bukan staging, dan bukan kesiapan pilot.
 
-Legenda: [x] ada dan teruji lokal, [~] ada tetapi tertutup/sementara, [ ] belum ada.
+Legenda: [x] ada dan teruji lokal (Postgres lokal; bila disebut, juga GoTrue/PostgREST nyata), [~] ada tetapi tertutup/sementara/sebagian, [ ] belum ada atau belum terbukti.
 
 ## P0
 
-- [~] Autentikasi: bergantung pada Supabase Auth (tidak diuji, hanya ditiru shim `auth.uid()`). Role awal `customer`; promosi role hanya lewat `provision_set_user_role`.
+- [x] Autentikasi: diverifikasi lokal dengan GoTrue v2.197.0 + PostgREST v16.5 nyata (signup, login, JWT, refresh rotation, logout, penolakan token palsu/kedaluwarsa); BUKAN Supabase cloud. Role awal `customer` walau metadata meminta admin; promosi role hanya lewat `provision_set_user_role`. Risiko: access token tetap valid sampai `exp` setelah logout.
 - [x] Katalog: RLS publik toko aktif dan produk tersedia; `list_stores`, `search_products` dengan pagination.
 - [ ] Keranjang: sepenuhnya sisi client (frontend belum ada).
-- [~] Checkout/pembuatan pesanan COD: `create_order` dengan idempotency key, harga dihitung server. Tertutup per toko sampai ongkir/radius/koordinat diisi (`store_delivery_not_configured`).
+- [~] Checkout/pembuatan pesanan COD: `create_order` dengan idempotency key, harga dihitung server; alur COD dan konkurensi teruji lewat HTTP nyata lokal. Tertutup per toko sampai ongkir/radius/koordinat diisi (`store_delivery_not_configured`); nilai di tes sintetis, bukan keputusan bisnis.
 - [x] Status penjual: accept/reject/preparing/ready_for_pickup oleh seller pemilik toko.
 - [~] Tugas/status driver: assignment hanya admin (fallback sementara); driver picked_up/delivered.
-- [x] Kontrol akses: RLS, grant kolom, blok tulis langsung, guard role/toko (110 tes negatif akses).
-- [ ] Frontend/PWA, deployment, dan integrasi nyata dengan Supabase Auth/PostgREST.
+- [x] Kontrol akses: RLS, grant kolom, blok tulis langsung, guard role/toko; matriks RLS empat peran + anon teruji via HTTP dengan JWT asli (lokal).
+- [ ] Frontend/PWA dan deployment: belum ada. Integrasi dengan Supabase cloud (bukan tumpukan lokal) belum dilakukan.
+- [ ] Supabase Storage / unggah foto: tidak tersedia. Storage v1.90.0 butuh Node >= 26 (hanya Node 18/20/22/24 ada) sehingga tidak dijalankan; bukan P0; kontrak hanya `image_url` text; tidak ada bucket/policy. Perlu migrasi policy Storage yang diuji pada tumpukan ber-Storage.
 
 ## P1
 
@@ -44,10 +45,11 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 
 ## Gap lain yang diketahui
 
-- Audit live harga NaN di `products` BELUM TERLAKSANA (tidak ada akses baca terotorisasi); jalankan preflight di `README.md` sebelum migrasi hardening karena migrasi gagal tertutup bila ada baris NaN.
-- Migrasi hardening belum diterapkan ke staging/produksi; langkah ada di `README.md`. Tes belum dijalankan terhadap Supabase sungguhan (staging).
-- Uji lintas peran dengan JWT/Auth asli dan PostgREST belum dilakukan; harness meniru lewat `SET ROLE` dan `request.jwt.claims`.
-- Docker/Supabase CLI tidak dipakai/dijalankan di sandbox pengembangan.
-- Workflow CI `.github/workflows/backend-tests.yml` sudah dijalankan di GitHub, semua completed/success, masing-masing satu `pull_request` dan satu `push` per commit: `41eb679` ([42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072) pull_request, [42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122) push); `22e5133` ([42342881893](https://github.com/aldiloop/sendfood/actions/runs/42342881893) pull_request, [42342878043](https://github.com/aldiloop/sendfood/actions/runs/42342878043) push). Cakupannya hanya Postgres 16 biasa dengan shim Supabase; bukan Supabase Auth/PostgREST/staging, yang tetap belum diuji.
+- **Migrasi hardening belum diterapkan live.** Fondasi live; ledger live mencatatnya sebagai `20261107042649` (nama berkas `20261107000000`): ketidakcocokan yang diketahui. JANGAN memutar ulang atau mengedit fondasi di remote. Runbook di `README.md`; tidak ada staging.
+- **Audit NaN live untuk kolom baru BELUM dilakukan** (`stores.delivery_fee`, `stores.service_radius_km`, `orders.subtotal/delivery_fee/total`, `order_items.unit_price_snapshot/line_total`). Audit sebelumnya hanya `products.price` (dilaporkan 0 oleh pengguna). Jangan asumsikan bersih; migrasi akan gagal tertutup (`23514`, rollback penuh) bila ada baris NaN. Preflight lengkap ada di `README.md`.
+- Temuan NaN (statis, dikonfirmasi fixture lokal sebelum perbaikan): ongkir NaN menghasilkan total NaN, radius NaN menerima alamat ~60 km; diperbaiki di hardening maju (lihat `API_CONTRACT.md` dan `TEST_EVIDENCE.md`).
+- Atomisitas hardening terbukti pada `psql` lokal (satu transaksi eksplisit; kegagalan terkunci 55P03 dalam ~5 detik). `psql -f` tanpa `ON_ERROR_STOP` keluar 0 saat gagal: wajib `ON_ERROR_STOP=1`. Perilaku SQL editor/`supabase db push` Supabase sungguhan belum diuji.
+- Hasil lokal: lihat angka bertanggal di `TEST_EVIDENCE.md` (akan diperbarui setelah run final). CI dua-job (`runtime-tests`, `http-stack-tests`) belum pernah dijalankan di GitHub untuk commit terbaru; riwayat run lama (hanya job SQL): `41eb679` ([42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072), [42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122)) dan `22e5133` ([42342881893](https://github.com/aldiloop/sendfood/actions/runs/42342881893), [42342878043](https://github.com/aldiloop/sendfood/actions/runs/42342878043)).
+- Docker/Supabase CLI tidak dipakai. Seluruh tes memakai biner lokal tanpa kontak ke Supabase cloud.
 - Tidak ada notifikasi, pembayaran online, penugasan otomatis, rate limiting tingkat API, atau pemantauan/backup yang dikonfigurasi dari repo ini.
-- Kunci `service_role` tidak pernah disimpan di repo; provisioning admin pertama harus dilakukan manual oleh operator tepercaya.
+- Kunci `service_role` tidak pernah disimpan di repo; provisioning admin pertama dilakukan manual oleh operator tepercaya.

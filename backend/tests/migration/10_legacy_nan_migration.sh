@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Tes migrasi hardening pada database legacy (hanya migrasi fondasi) yang berisi harga NaN.
-# Membuktikan: (1) migrasi gagal tertutup (SQLSTATE 23514, exit non-nol) dan SELURUH perubahan
-# di-rollback pada jalur runner `psql -1`; (2) psql tanpa -1 TIDAK atomik (parsial); (3) migrasi
-# berhasil pada DB legacy bersih; (4) remediasi manual pada fixture lokal terpisah lalu migrasi berhasil.
+# Membuktikan: (1) lewat runner terdokumentasi backend/scripts/apply_migration_local.sh migrasi gagal
+# tertutup (SQLSTATE 23514, exit 3) dan SELURUH perubahan di-rollback; (2) karena berkas hardening kini
+# satu transaksi eksplisit, `psql -f` mentah juga atomik (exit 3 dengan ON_ERROR_STOP; tanpa ON_ERROR_STOP
+# exit 0 = kegagalan senyap, tetap di-rollback); (3) migrasi berhasil pada DB legacy bersih; (4) remediasi
+# manual pada fixture lokal terpisah lalu migrasi berhasil; (5) lock_timeout membuat migrasi gagal cepat
+# (55P03) dan rollback bila tabel terkunci sesi lain.
 # Dipanggil oleh backend/tests/run.sh (PGHOST/PGPORT/PGUSER/PSQL_BIN sudah di-export).
 # Semua database dibuat dengan nama sendfood_test_legacy_* dan di-drop di akhir. Tidak menyentuh data produksi.
 set -uo pipefail
@@ -17,6 +20,9 @@ PG_DUMP="$BIN/pg_dump"
 FOUNDATION="$ROOT/backend/migrations/20261107000000_sendfood_backend_foundation.sql"
 HARDENING="$ROOT/backend/migrations/20261108000000_sendfood_backend_mvp_hardening.sql"
 SHIM="$HERE/harness/supabase_shim.sql"
+RUNNER="$ROOT/backend/scripts/apply_migration_local.sh"
+# run_runner <db> <stdout> <stderr>: jalur terdokumentasi (ON_ERROR_STOP, transaksi tunggal, guard lokal).
+run_runner() { PGDATABASE="$1" SENDFOOD_MIGRATION_ALLOW_DB_PREFIX=sendfood_test_ SENDFOOD_MIGRATION_VERBOSITY=verbose PG_BIN="$BIN" bash "$RUNNER" "$HARDENING" >"$2" 2>"$3"; }
 
 TMP="$(mktemp -d)"
 SUFFIX="$(date +%s)_$$"
@@ -104,18 +110,19 @@ check_nan_error() { # check_nan_error <label> <stderr-file>
 
 echo "== Versi: $("$PSQL_BIN" -X -q -At -d postgres -c 'show server_version')"
 
-# ---------- A. Legacy NaN + runner terdokumentasi (psql -1): gagal tertutup + rollback penuh ----------
+# ---------- A. Legacy NaN + runner terdokumentasi: gagal tertutup + rollback penuh ----------
 mkdb nanfail; DB_A="$MKDB"
 seed_legacy "$DB_A" yes
 check "legacy: fixture NaN terpasang sebelum migrasi" \
   "$(sql "$DB_A" -At -c "select count(*) from public.products where price = 'NaN'::numeric")" "1"
 snap "$DB_A" "$TMP/A.before" "snapshot sebelum" || exit 1
 
-"$PSQL_BIN" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -d "$DB_A" -1 -f "$HARDENING" >"$TMP/A.out" 2>"$TMP/A.err"
+run_runner "$DB_A" "$TMP/A.out" "$TMP/A.err"
 rc=$?
-note "migrasi hardening pada legacy NaN (psql -1): exit=$rc"
-check "legacy NaN: migrasi hardening keluar tepat 3 (ON_ERROR_STOP)" "$rc" "3"
-check_nan_error "legacy NaN (psql -1)" "$TMP/A.err"
+note "migrasi hardening pada legacy NaN (runner apply_migration_local.sh): exit=$rc"
+check "legacy NaN: runner keluar tepat 3 (ON_ERROR_STOP)" "$rc" "3"
+check_nan_error "legacy NaN (runner)" "$TMP/A.err"
+if grep -q 'MIGRASI GAGAL (exit 3)' "$TMP/A.err"; then pass "legacy NaN: runner melaporkan kegagalan dan rollback secara eksplisit"; else fail "runner pesan" "tidak ada 'MIGRASI GAGAL (exit 3)'"; fi
 snap "$DB_A" "$TMP/A.after" "snapshot sesudah" || exit 1
 if cmp -s "$TMP/A.before.schema" "$TMP/A.after.schema"; then pass "rollback: dump skema (tabel/fungsi/trigger/policy/grant) identik sebelum/sesudah"; else fail "rollback: skema" "berbeda: $(diff "$TMP/A.before.schema" "$TMP/A.after.schema" | head -5 | tr '\n' ' ')"; fi
 if cmp -s "$TMP/A.before.data" "$TMP/A.after.data"; then pass "rollback: data baris legacy (termasuk NaN) identik sebelum/sesudah"; else fail "rollback: data" "berbeda"; fi
@@ -128,29 +135,48 @@ check "rollback: baris legacy NaN masih ada dan tidak diubah/dihapus otomatis" \
 check "rollback: create_order tetap versi fondasi (tanpa guard invalid_product_price)" \
   "$(sql "$DB_A" -At -c "select (pg_get_functiondef(p.oid) like '%invalid_product_price%')::text from pg_proc p where p.proname='create_order' and p.pronamespace='public'::regnamespace")" "false"
 
-# ---------- B. Pembanding: psql TANPA -1 tidak atomik ----------
+# ---------- B. psql -f mentah TANPA -1 (dengan ON_ERROR_STOP): kini tetap atomik ----------
 mkdb nanraw; DB_B="$MKDB"
 seed_legacy "$DB_B" yes
 snap "$DB_B" "$TMP/B.before" "snapshot B sebelum" || exit 1
 "$PSQL_BIN" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -d "$DB_B" -f "$HARDENING" >"$TMP/B.out" 2>"$TMP/B.err"
 rcb=$?
 snap "$DB_B" "$TMP/B.after" "snapshot B sesudah" || exit 1
-note "psql TANPA -1 pada legacy NaN: exit=$rcb"
+note "psql -f TANPA -1 (ON_ERROR_STOP) pada legacy NaN: exit=$rcb"
 check "tanpa -1: keluar tepat 3 (ON_ERROR_STOP)" "$rcb" "3"
 check_nan_error "tanpa -1" "$TMP/B.err"
-if cmp -s "$TMP/B.before.schema" "$TMP/B.after.schema"; then
-  fail "tanpa -1: dugaan tidak atomik" "skema tidak berubah (ternyata atomik?)"
+if cmp -s "$TMP/B.before.schema" "$TMP/B.after.schema" && cmp -s "$TMP/B.before.catalog" "$TMP/B.after.catalog" \
+   && cmp -s "$TMP/B.before.data" "$TMP/B.after.data"; then
+  pass "tanpa -1: atomik karena BEGIN/COMMIT di berkas (skema, katalog, data identik)"
 else
-  pass "tanpa -1: TIDAK atomik, perubahan parsial tertinggal (jangan dipakai untuk deploy)"
+  fail "tanpa -1: atomisitas" "perubahan parsial tertinggal: $(diff "$TMP/B.before.schema" "$TMP/B.after.schema" | head -4 | tr '\n' ' ')"
+fi
+
+# ---------- B2. psql -f mentah TANPA ON_ERROR_STOP: rollback tetapi exit 0 (kegagalan senyap) ----------
+mkdb nansilent; DB_B2="$MKDB"
+seed_legacy "$DB_B2" yes
+snap "$DB_B2" "$TMP/B2.before" "snapshot B2 sebelum" || exit 1
+"$PSQL_BIN" -X -q -v VERBOSITY=verbose -d "$DB_B2" -f "$HARDENING" >"$TMP/B2.out" 2>"$TMP/B2.err"
+rcb2=$?
+snap "$DB_B2" "$TMP/B2.after" "snapshot B2 sesudah" || exit 1
+note "psql -f tanpa ON_ERROR_STOP: exit=$rcb2 (psql tidak menandai error lewat exit code)"
+check "tanpa ON_ERROR_STOP: exit 0 walau gagal (alasan runner mewajibkan ON_ERROR_STOP)" "$rcb2" "0"
+check_nan_error "tanpa ON_ERROR_STOP" "$TMP/B2.err"
+if grep -q 'current transaction is aborted' "$TMP/B2.err"; then pass "tanpa ON_ERROR_STOP: statement sesudah error ditolak (transaksi aborted)"; else fail "tanpa ON_ERROR_STOP" "tidak ada 'current transaction is aborted'"; fi
+if cmp -s "$TMP/B2.before.schema" "$TMP/B2.after.schema" && cmp -s "$TMP/B2.before.catalog" "$TMP/B2.after.catalog" \
+   && cmp -s "$TMP/B2.before.data" "$TMP/B2.after.data"; then
+  pass "tanpa ON_ERROR_STOP: COMMIT menjadi ROLLBACK, skema/katalog/data identik"
+else
+  fail "tanpa ON_ERROR_STOP: atomisitas" "berubah"
 fi
 
 # ---------- C. Legacy bersih: migrasi berhasil ----------
 mkdb clean; DB_C="$MKDB"
 seed_legacy "$DB_C" no
 snap "$DB_C" "$TMP/C.before" "snapshot C sebelum" || exit 1
-"$PSQL_BIN" -X -q -v ON_ERROR_STOP=1 -d "$DB_C" -1 -f "$HARDENING" >"$TMP/C.out" 2>"$TMP/C.err"
+run_runner "$DB_C" "$TMP/C.out" "$TMP/C.err"
 rcc=$?
-note "migrasi hardening pada legacy bersih (psql -1): exit=$rcc"
+note "migrasi hardening pada legacy bersih (runner): exit=$rcc"
 check "legacy bersih: migrasi hardening exit 0" "$rcc" "0"
 check "legacy bersih: tidak ada ERROR di stderr (NOTICE 'does not exist, skipping' wajar)" "$(grep -c 'ERROR' "$TMP/C.err")" "0"
 check "legacy bersih: constraint products_price_not_nan ada dan tervalidasi" \
@@ -176,7 +202,63 @@ seed_legacy "$DB_D" yes
 # Opsi remediasi contoh (HANYA fixture lokal ini): nonaktifkan produk dan set harga 0 menunggu keputusan pemilik.
 sql "$DB_D" -c "update public.products set is_available = false, price = 0 where price = 'NaN'::numeric" >/dev/null
 check "remediasi fixture: tidak ada NaN tersisa" "$(sql "$DB_D" -At -c "select count(*) from public.products where price = 'NaN'::numeric")" "0"
-"$PSQL_BIN" -X -q -v ON_ERROR_STOP=1 -d "$DB_D" -1 -f "$HARDENING" >"$TMP/D.out" 2>"$TMP/D.err"
+run_runner "$DB_D" "$TMP/D.out" "$TMP/D.err"
 check "remediasi fixture: migrasi hardening exit 0 setelah remediasi" "$?" "0"
 check "remediasi fixture: constraint terpasang" \
   "$(sql "$DB_D" -At -c "select count(*) from pg_constraint where conname='products_price_not_nan' and convalidated")" "1"
+
+# ---------- E. Fail-fast: tabel products dikunci sesi lain -> lock_timeout 55P03 dan rollback ----------
+mkdb locked; DB_E="$MKDB"
+seed_legacy "$DB_E" no
+snap "$DB_E" "$TMP/E.before" "snapshot E sebelum" || exit 1
+# Sesi lain memegang ACCESS EXCLUSIVE pada products selama 30 detik (dibatalkan setelah migrasi selesai).
+"$PSQL_BIN" -X -q -d "$DB_E" -c "begin; lock table public.products in access exclusive mode; select pg_sleep(30); commit;" >/dev/null 2>&1 &
+LOCKER=$!
+for i in $(seq 1 50); do
+  [ "$(sql "$DB_E" -At -c "select count(*) from pg_locks l join pg_class c on c.oid=l.relation where c.relname='products' and l.mode='AccessExclusiveLock' and l.granted")" = 1 ] && break
+  sleep 0.1
+done
+t0=$(date +%s)
+run_runner "$DB_E" "$TMP/E.out" "$TMP/E.err"
+rce=$?; t1=$(date +%s)
+kill "$LOCKER" >/dev/null 2>&1; wait "$LOCKER" 2>/dev/null
+sql "$DB_E" -c "select pg_terminate_backend(pid) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()" >/dev/null
+note "migrasi saat products terkunci: exit=$rce dalam $((t1-t0)) detik; $(grep -m1 'ERROR:' "$TMP/E.err")"
+check "lock: runner keluar tepat 3" "$rce" "3"
+if grep -q 'ERROR:  55P03:' "$TMP/E.err"; then pass "lock: gagal cepat dengan SQLSTATE 55P03 (lock_timeout)"; else fail "lock: SQLSTATE" "$(tr '\n' ' ' < "$TMP/E.err" | cut -c1-300)"; fi
+if [ $((t1-t0)) -lt 25 ]; then pass "lock: tidak menunggu kunci sampai selesai (< 25 detik)"; else fail "lock: durasi" "$((t1-t0)) detik"; fi
+snap "$DB_E" "$TMP/E.after" "snapshot E sesudah" || exit 1
+if cmp -s "$TMP/E.before.schema" "$TMP/E.after.schema" && cmp -s "$TMP/E.before.catalog" "$TMP/E.after.catalog"; then
+  pass "lock: skema dan katalog identik (rollback penuh)"; else fail "lock: rollback" "berubah"; fi
+
+# ---------- F. Guard runner: target bukan DB tes ditolak sebelum menyentuh database ----------
+PGDATABASE=postgres SENDFOOD_MIGRATION_ALLOW_DB_PREFIX=sendfood_test_ PG_BIN="$BIN" bash "$RUNNER" "$HARDENING" >"$TMP/F.out" 2>"$TMP/F.err"
+check "guard: runner menolak database non-sendfood_test_ (exit 3)" "$?" "3"
+PGHOST=db.example.com PGDATABASE=sendfood_test_x PG_BIN="$BIN" bash "$RUNNER" "$HARDENING" >"$TMP/F2.out" 2>"$TMP/F2.err"
+check "guard: runner menolak host non-lokal (exit 3)" "$?" "3"
+check "guard: tidak ada migrasi hardening di database postgres" \
+  "$("$PSQL_BIN" -X -q -At -d postgres -c "select count(*) from pg_class where relname='ops_policy'")" "0"
+
+# ---------- G. Legacy toko dengan delivery_fee/service_radius_km NaN: gagal tertutup, rollback, data tidak diubah ----------
+for col in delivery_fee service_radius_km; do
+  mkdb "store${col%%_*}"; DB_G="$MKDB"
+  seed_legacy "$DB_G" no
+  sql "$DB_G" -c "update public.stores set delivery_fee = 5000, service_radius_km = 5, latitude = -6.2, longitude = 106.8
+      where id = '22222222-2222-2222-2222-222222222222';
+    update public.stores set $col = 'NaN' where id = '22222222-2222-2222-2222-222222222222'" >/dev/null || exit 2
+  snap "$DB_G" "$TMP/G$col.before" "snapshot G $col sebelum" || exit 1
+  run_runner "$DB_G" "$TMP/G$col.out" "$TMP/G$col.err"
+  rcg=$?
+  case "$col" in delivery_fee) cname=stores_delivery_fee_not_nan ;; *) cname=stores_service_radius_not_nan ;; esac
+  check "legacy $col NaN: runner keluar tepat 3" "$rcg" "3"
+  line="$(grep -m1 "ERROR:  23514:.*$cname" "$TMP/G$col.err")"
+  if [ -n "$line" ]; then pass "legacy $col NaN: baris ERROR memuat 23514 dan $cname"; note "legacy $col NaN baris ERROR asli: $line"
+  else fail "legacy $col NaN: baris ERROR" "$(tr '\n' ' ' < "$TMP/G$col.err" | cut -c1-400)"; fi
+  snap "$DB_G" "$TMP/G$col.after" "snapshot G $col sesudah" || exit 1
+  if cmp -s "$TMP/G$col.before.schema" "$TMP/G$col.after.schema" && cmp -s "$TMP/G$col.before.catalog" "$TMP/G$col.after.catalog" \
+     && cmp -s "$TMP/G$col.before.data" "$TMP/G$col.after.data"; then
+    pass "legacy $col NaN: skema/katalog/data identik (rollback penuh, baris legacy tidak diubah)"
+  else fail "legacy $col NaN: rollback" "berubah"; fi
+  check "legacy $col NaN: nilai NaN legacy tetap ada" \
+    "$(sql "$DB_G" -At -c "select count(*) from public.stores where $col = 'NaN'::numeric")" "1"
+done

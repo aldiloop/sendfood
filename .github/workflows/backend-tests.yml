@@ -10,9 +10,11 @@ on:
 permissions:
   contents: read
 
+# Hanya tes. Tidak ada deploy/migrasi ke Supabase dan tidak ada secret yang dipakai.
 jobs:
   runtime-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -32,10 +34,28 @@ jobs:
       SENDFOOD_TEST_PGUSER: postgres
       PGPASSWORD: ci-only-throwaway
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Pasang klien PostgreSQL
         run: |
           sudo apt-get update && sudo apt-get install -y postgresql-client
           echo "PG_BIN=$(dirname "$(ls /usr/lib/postgresql/*/bin/psql | tail -n1)")" >> "$GITHUB_ENV"
-      - name: Jalankan tes backend (structural, runtime, concurrency)
+      - name: Jalankan tes backend (structural, runtime, concurrency, migrasi legacy)
         run: bash backend/tests/run.sh
+
+  http-stack-tests:
+    # Supabase Auth (GoTrue) + PostgREST asli dari GitHub Releases (SHA256 diverifikasi), Postgres lokal.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Pasang PostgreSQL 16 (initdb, pg_ctl, psql)
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-16
+          echo "PG_BIN=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
+      - name: Ambil biner resmi PostgREST dan Supabase Auth
+        run: bash backend/tests/stack/fetch_bins.sh
+      - name: Jalankan stack HTTP
+        run: bash backend/tests/stack/run_stack.sh

@@ -49,6 +49,15 @@ from (
          and c.contype = 'c'
          and c.convalidated
        limit 1))
+    ),
+    (
+      'store fee/radius and order amounts exclude numeric NaN',
+      (select count(*) = 4
+       from (select c.conname from pg_catalog.pg_constraint c
+             where c.contype = 'c' and c.convalidated
+               and c.conname in ('stores_delivery_fee_not_nan','stores_service_radius_not_nan',
+                                 'orders_amounts_not_nan','order_items_amounts_not_nan')
+             limit 4) as nan_constraints)
     )
 ) as checks(check_name, passed)
 order by check_name

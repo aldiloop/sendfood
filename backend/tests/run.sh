@@ -64,7 +64,8 @@ echo "== Menerapkan shim Supabase"
 
 for f in "$ROOT"/backend/migrations/*.sql; do
   echo "== Migrasi: $(basename "$f")"
-  "${PSQL[@]}" -1 -f "$f" || { echo "GAGAL: migrasi $(basename "$f")"; exit 1; }
+  SENDFOOD_MIGRATION_ALLOW_DB_PREFIX=sendfood_test_ PG_BIN="$PG_BIN_DIR" \
+    bash "$ROOT/backend/scripts/apply_migration_local.sh" "$f" || { echo "GAGAL: migrasi $(basename "$f")"; exit 1; }
 done
 
 pass=0; fail=0; skip=0; failed_names=()
