@@ -118,7 +118,7 @@ ROLLBACK;
 DO $$
 BEGIN
   PERFORM t.login('40000000-0000-0000-0000-000000000001');
-  PERFORM t.expect_err('completion: admin aplikasi tidak bisa provision_set_policy', 
+  PERFORM t.expect_err('completion: admin aplikasi tidak bisa provision_set_policy',
     $q$select public.provision_set_policy('completion_actor', 'seller')$q$, 'permission denied');
   PERFORM t.logout();
   PERFORM t.ok('completion: fixture kebijakan tetap customer setelah semua rollback',
