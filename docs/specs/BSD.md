@@ -2,10 +2,10 @@
 ## Send Food
 
 **Versi:** 1.0 | **Tanggal:** 7 November 2026  
-**Status:** Usulan model data — Cue wajib memvalidasi sebelum migrasi
+**Status:** Usulan model data — Kiro wajib memvalidasi sebelum migrasi
 
 ## 1. Prinsip
-Schema berikut adalah rancangan awal untuk MVP, bukan klaim bahwa tabel sudah dibuat. Cue harus memeriksa kebutuhan aktual, menormalisasi relasi, menetapkan constraint/index, menulis migrasi, dan menguji RLS sebelum frontend menggunakannya.
+Schema berikut adalah rancangan awal untuk MVP, bukan klaim bahwa tabel sudah dibuat. Kiro harus memeriksa kebutuhan aktual, menormalisasi relasi, menetapkan constraint/index, menulis migrasi, dan menguji RLS sebelum frontend menggunakannya.
 
 ## 2. Entitas yang diusulkan
 ### `profiles`
@@ -123,7 +123,7 @@ Semua kebijakan di atas harus diterjemahkan ke RLS yang diuji. Jangan mengandalk
 - Timestamp menggunakan timezone-aware `timestamptz`.
 
 ## 6. Index awal
-Pertimbangkan index pada `stores.owner_id`, `products.store_id`, `orders.customer_id`, `orders.store_id`, `orders.driver_id`, `orders.order_status`, `orders.created_at`, dan `order_items.order_id`. Cue harus memeriksa query aktual sebelum menetapkan index final.
+Pertimbangkan index pada `stores.owner_id`, `products.store_id`, `orders.customer_id`, `orders.store_id`, `orders.driver_id`, `orders.order_status`, `orders.created_at`, dan `order_items.order_id`. Kiro harus memeriksa query aktual sebelum menetapkan index final.
 
 ## 7. Hal yang belum diputuskan
 - Apakah alamat pelanggan disimpan sebagai tabel `customer_addresses` atau hanya saat checkout.
@@ -140,4 +140,4 @@ Pertimbangkan index pada `stores.owner_id`, `products.store_id`, `orders.custome
 - [ ] Tes akses silang antar customer, seller, dan driver lulus.
 - [ ] Total pesanan dihitung di sisi tepercaya.
 - [ ] Migrasi dapat dijalankan ulang/di-version-control sesuai praktik proyek.
-- [ ] Kontrak API diperbarui dan disetujui Muse.
+- [ ] Kontrak API diperbarui dan frontend disesuaikan dengan kontrak tersebut.

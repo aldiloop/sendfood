@@ -4,8 +4,8 @@
 **Versi:** 1.0 | **Tanggal:** 7 November 2026 | **Status:** Draft teknis untuk validasi
 
 ## 1. Arsitektur yang dituju
-- **Frontend:** PWA mobile-first, dikerjakan Muse melalui Antigravity.
-- **Backend/data:** Supabase, dikerjakan Cue melalui Kiro Web.
+- **Frontend:** PWA mobile-first, dikerjakan dengan Kiro.
+- **Backend/data:** Supabase, dikerjakan dengan Kiro.
 - **Database:** PostgreSQL yang disediakan Supabase.
 - **Authentication:** Supabase Auth.
 - **Authorization:** role-based access control dan Row Level Security (RLS).
@@ -14,13 +14,15 @@
 
 Teknologi framework frontend, package manager, dan pola routing harus mengikuti hasil inspeksi repository aktual. Jangan mengasumsikan stack atau membuat file konfigurasi sebelum memeriksa project.
 
-## 2. Batas kepemilikan agent
-| Agent | Area kepemilikan | Tidak boleh |
-|---|---|---|
-| Cue — Kiro Web | Supabase, migrasi/schema, RLS, backend logic, API contract, backend tests | Mengubah UI/frontend |
-| Muse — Antigravity | UI, UX, komponen, halaman, state frontend, integrasi API dari kontrak | Mengubah schema database/RLS secara sepihak |
+## 2. Kepemilikan pengembangan
+Seluruh pengembangan dikerjakan dengan **Kiro**, backend maupun frontend.
 
-Perubahan lintas batas harus diajukan melalui kontrak API dan disetujui pemilik area. Tidak boleh dua agent mengedit file yang sama secara bersamaan.
+| Area | Cakupan | Aturan |
+|---|---|---|
+| Backend | Supabase, migrasi/schema, RLS, backend logic, API contract, backend tests | Perubahan schema/RLS selalu lewat migrasi maju baru dan pembaruan `backend/API_CONTRACT.md` |
+| Frontend | UI, UX, komponen, halaman, state frontend, integrasi API | Hanya memakai field, RPC, status, dan error yang tercantum di kontrak API |
+
+Walaupun dikerjakan oleh tool yang sama, kontrak API tetap menjadi batas antara backend dan frontend. Jika frontend butuh data atau perilaku baru, ubah backend dan kontraknya lebih dulu dalam perubahan terpisah yang dapat ditinjau.
 
 ## 3. Persyaratan fungsional teknis
 - Login dan registrasi menggunakan Supabase Auth.
@@ -58,7 +60,7 @@ Perubahan lintas batas harus diajukan melalui kontrak API dan disetujui pemilik 
 Status konseptual:
 `pending_seller` → `accepted` atau `rejected` → `preparing` → `ready_for_pickup` → `picked_up` → `delivered` → `completed`.
 
-Status tambahan yang perlu aturan eksplisit: `cancelled` dan `payment_pending`/`payment_verified` untuk transfer manual. Nama enum final harus disepakati Cue dan dicerminkan persis pada frontend. Jangan implementasikan dua sistem status yang berbeda.
+Status tambahan yang perlu aturan eksplisit: `cancelled` dan `payment_pending`/`payment_verified` untuk transfer manual. Nama enum final ditetapkan di migrasi backend dan dicerminkan persis pada frontend. Jangan implementasikan dua sistem status yang berbeda.
 
 ## 7. Integrasi frontend–backend
 - API contract menjadi sumber kebenaran untuk nama field, tipe data, error, dan status.

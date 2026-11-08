@@ -75,4 +75,4 @@ Button (primary/secondary/destructive), input, select, search, filter/sort sheet
 - Jangan menambahkan fitur visual yang belum didukung backend.
 - Jangan membuat data demo terlihat seperti transaksi/rating nyata.
 - Jangan membuat dashboard penuh grafik sebelum data analitik tersedia.
-- Muse tidak mengubah schema backend untuk menyesuaikan desain; ajukan perubahan melalui kontrak API.
+- Jangan mengubah schema backend hanya untuk menyesuaikan desain. Jika desain butuh data baru, buat migrasi maju dan perbarui kontrak API lebih dulu.

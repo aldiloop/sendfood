@@ -5,7 +5,7 @@
 **Strategi:** MVP bertahap, PWA terlebih dahulu, biaya awal serendah mungkin (target Rp0 selama memungkinkan).
 
 ## 1. Strategi pelaksanaan
-Bangun satu alur transaksi end-to-end yang benar-benar berfungsi sebelum memperluas fitur. Hindari mengerjakan semua dashboard dan fitur tambahan sekaligus. Kiro Web/Cue menangani backend; Antigravity/Muse menangani frontend. Gunakan GitHub dan kontrak API sebagai titik koordinasi.
+Bangun satu alur transaksi end-to-end yang benar-benar berfungsi sebelum memperluas fitur. Hindari mengerjakan semua dashboard dan fitur tambahan sekaligus. Backend dan frontend sama-sama dikerjakan dengan Kiro. Gunakan GitHub dan kontrak API sebagai titik koordinasi antara keduanya.
 
 ## 2. Tahapan kerja
 ### Fase 0 — Persiapan dan verifikasi
@@ -16,16 +16,16 @@ Bangun satu alur transaksi end-to-end yang benar-benar berfungsi sebelum memperl
 **Output:** baseline repository dan keputusan MVP yang tercatat.
 
 ### Fase 1 — Fondasi backend
-**Cue**
+**Kiro (backend)**
 - Siapkan proyek Supabase dan environment.
 - Buat migrasi schema minimum.
 - Implementasikan Auth/profile dan role.
 - Terapkan RLS dan uji akses silang.
 - Buat kontrak API untuk katalog, checkout/order, dan perubahan status.
-**Gate:** schema, RLS, dan kontrak API diverifikasi sebelum Muse mengintegrasikan.
+**Gate:** schema, RLS, dan kontrak API diverifikasi sebelum frontend mengintegrasikan.
 
 ### Fase 2 — Fondasi frontend
-**Muse**
+**Kiro (frontend)**
 - Inspeksi repository dan ikuti stack aktual.
 - Bangun design tokens, layout mobile, navigasi, auth screens.
 - Buat komponen kartu toko/produk, form, status, loading/empty/error.
@@ -60,21 +60,23 @@ Bangun satu alur transaksi end-to-end yang benar-benar berfungsi sebelum memperl
 - Siapkan akun demo dan data uji yang tidak mengandung data pribadi nyata.
 **Gate:** checklist acceptance terpenuhi.
 
-## 3. Pembagian kerja agent
-| Area | Cue (Kiro Web) | Muse (Antigravity) |
+## 3. Pembagian kerja
+Semua area dikerjakan dengan Kiro. Pemilik repository tetap memegang keputusan produk.
+
+| Area | Dikerjakan | Catatan |
 |---|---|---|
-| PRD/keputusan produk | Konsultasi, tidak mengubah keputusan sepihak | Konsultasi, tidak mengubah keputusan sepihak |
-| Schema/migrasi/RLS | Owner | Tidak mengubah |
-| Backend/API contract | Owner | Mengonsumsi kontrak |
-| UI/UX/components | Tidak mengubah | Owner |
-| Frontend integration | Menyediakan contract/test data | Owner |
-| Integration testing | Backend tests | UI/e2e bersama |
-| Perubahan lintas area | Review dampak dan update contract | Ajukan perubahan contract |
+| PRD/keputusan produk | Pemilik repository | Kiro hanya memberi masukan, tidak mengubah keputusan sepihak |
+| Schema/migrasi/RLS | Kiro | Migrasi maju baru, disertai tes |
+| Backend/API contract | Kiro | Kontrak diperbarui di perubahan yang sama dengan migrasi |
+| UI/UX/components | Kiro | Mengikuti DBD dan mockup yang disetujui |
+| Frontend integration | Kiro | Hanya memakai yang tercantum di kontrak |
+| Integration testing | Kiro | Backend tests dan UI/e2e |
+| Perubahan lintas area | Kiro | Ubah backend + kontrak lebih dulu, lalu frontend, dalam PR terpisah |
 
 ## 4. Strategi branch dan integrasi
-- Gunakan branch terpisah, misalnya `backend/cue` dan `frontend/muse`, disesuaikan dengan repository aktual.
+- Gunakan branch terpisah untuk backend dan frontend (`backend`, `frontend`, `integration`) atau branch fitur turunannya.
 - Perubahan masuk melalui pull request/commit yang dapat ditinjau.
-- Jangan mengedit file yang sama secara bersamaan.
+- Jangan mengerjakan file yang sama di dua branch secara bersamaan agar tidak terjadi konflik.
 - Integrasikan setelah kontrak API stabil.
 - Setiap perubahan schema harus disertai migrasi dan pembaruan dokumentasi.
 
@@ -130,13 +132,13 @@ Bangun satu alur transaksi end-to-end yang benar-benar berfungsi sebelum memperl
 Untuk Kiroween 2026, pastikan penggunaan Kiro nyata dan dapat didemonstrasikan, repository publik memenuhi ketentuan resmi, aplikasi dapat diuji, dan video demo mengikuti batas durasi/ketentuan penyelenggara. Periksa kembali halaman resmi sebelum submission karena aturan dapat berubah. Tema/kategori hackathon harus dipilih secara sadar; jangan mengubah seluruh UI menjadi horor kecuali kategori yang dipilih memang menuntutnya.
 
 ## 9. Laporan progres harian
-Setiap agent melaporkan:
+Setiap sesi kerja Kiro melaporkan:
 - Selesai (tautan commit/PR bila ada).
 - Sedang dikerjakan.
 - Terhambat dan keputusan yang dibutuhkan.
 - File/schema/API yang berubah.
 - Cara menguji hasil.
-- Risiko terhadap agent lain.
+- Risiko terhadap area lain (backend ↔ frontend).
 
 ## 10. Aturan anti-halusinasi proyek
 - Selalu inspeksi file dan konfigurasi aktual sebelum mengubah.
