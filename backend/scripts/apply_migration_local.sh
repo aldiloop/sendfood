@@ -5,8 +5,11 @@
 #
 # Jaminan yang diuji (backend/tests/migration/10_legacy_nan_migration.sh):
 # * selalu psql -X -v ON_ERROR_STOP=1 -> error pertama menghentikan eksekusi, exit psql 3;
-# * berkas dengan BEGIN/COMMIT sendiri dijalankan apa adanya; berkas tanpa kontrol transaksi
-#   (mis. migrasi fondasi yang sudah live dan tidak boleh diubah) dibungkus --single-transaction;
+# * sebelum eksekusi, sql_tx_scan.py memindai statement top-level (komentar, string, identifier
+#   ber-kutip dan dollar-quote dilewati): berkas TANPA kontrol transaksi (mis. migrasi fondasi yang sudah
+#   live dan tidak boleh diubah) dibungkus --single-transaction; berkas dengan tepat satu BEGIN sebagai
+#   statement pertama dan satu COMMIT terakhir dijalankan apa adanya; selain itu (BEGIN/COMMIT ganda,
+#   END/ROLLBACK/SAVEPOINT, psql meta-command, BEGIN ATOMIC) DITOLAK exit 65 tanpa menyentuh database;
 # * gagal di tengah = seluruh berkas di-rollback (skema, katalog, data).
 #
 # Script ini MENOLAK target non-lokal. Ia bukan alat deploy produksi; penerapan ke Supabase dijelaskan
@@ -28,18 +31,13 @@ case "${PGDATABASE:-}" in
 esac
 PG_BIN_DIR="$(find_pg_bin "$ROOT")" || { echo "psql tidak ditemukan" >&2; exit 2; }
 
-# Statement pertama/terakhir (tanpa komentar dan baris kosong).
-body="$(sed -e 's/--.*$//' "$f" | tr -s '[:space:]' ' ')"
-first="$(printf '%s' "$body" | sed -E 's/^ *//' | cut -c1-6 | tr 'A-Z' 'a-z')"
-last="$(printf '%s' "$body" | sed -E 's/ *$//' | rev | cut -c1-7 | rev | tr 'A-Z' 'a-z')"
-mode=()
-if [ "$first" = "begin;" ] && [ "$last" = "commit;" ]; then
-  mode=()            # berkas sudah atomik sendiri (BEGIN ... COMMIT)
-elif printf '%s' "$body" | grep -qiE '(^| )(begin|commit|rollback|start transaction) *;'; then
-  echo "DITOLAK: $f memakai kontrol transaksi di tengah berkas; tidak bisa dijamin atomik." >&2; exit 65
-else
-  mode=(--single-transaction)
-fi
+# Validasi kontrol transaksi SEBELUM menyentuh database (komentar/string/dollar-quote dilewati).
+scan="$(python3 "$ROOT/backend/scripts/sql_tx_scan.py" "$f")" || exit 65
+case "$scan" in
+  own)  mode=() ;;                       # tepat satu BEGIN pertama + satu COMMIT terakhir
+  wrap) mode=(--single-transaction) ;;   # tanpa kontrol transaksi: dibungkus satu transaksi
+  *) echo "DITOLAK: hasil pemindai tidak dikenal" >&2; exit 65 ;;
+esac
 
 PGOPTIONS="${PGOPTIONS:-} -c client_min_messages=warning" "$PG_BIN_DIR/psql" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY="${SENDFOOD_MIGRATION_VERBOSITY:-default}" \
   "${mode[@]}" -f "$f"

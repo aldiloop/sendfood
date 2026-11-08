@@ -1,7 +1,7 @@
 // Alur COD end-to-end lewat GoTrue + PostgREST asli dengan akun terpisah per peran.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { rest, rpc, sql, count, world, orderArgs, expectOk, expectError, FIX, run } from './lib/client.mjs';
+import { rest, rpc, sql, count, world, orderArgs, expectOk, expectError, FIX, run, service } from './lib/client.mjs';
 
 let w, order, args;
 before(async () => { w = await world(); });
@@ -92,9 +92,23 @@ test('lifecycle: seller accepted -> preparing -> ready; admin assign; driver pic
   expectError(await rpc('assign_order_driver', { p_order_id: id, p_driver_id: w.driverB.id }, w.admin.token),
     { status: 400, message: 'order_not_assignable' }, 'reassign setelah pickup');
   expectOk(await st(id, 'delivered', w.driverA.token), 'delivered');
+  // Migrasi tidak menyetel aktor completion: semua peran, termasuk admin, ditolak tanpa perubahan.
+  assert.equal(count('public.ops_policy', `key='completion_actor'`), 0, 'tidak ada default completion_actor');
+  const hBefore = count('public.order_status_history', `order_id='${id}'`);
+  for (const who of [w.customerA, w.sellerA, w.driverA, w.admin]) {
+    expectError(await st(id, 'completed', who.token), { status: 400, message: 'completion_policy_not_configured', code: 'P0001' },
+      `completed tanpa kebijakan (${who.label})`);
+  }
+  assert.equal(sql(`select order_status||'/'||payment_status from public.orders where id='${id}'`), 'delivered/unpaid');
+  assert.equal(count('public.order_status_history', `order_id='${id}'`), hBefore);
+  // FIXTURE SINTETIS di DB sekali pakai (bukan keputusan bisnis): aktor disetel eksplisit lewat service_role.
+  expectError(await rpc('provision_set_policy', { p_key: 'completion_actor', p_value: 'customer' }, w.admin.token),
+    { status: [401, 403, 404] }, 'admin aplikasi tidak bisa menyetel kebijakan');
+  expectOk(await service.rpc('provision_set_policy', { p_key: 'completion_actor', p_value: 'customer' }), 'provision completion_actor', [200, 204]);
   expectError(await st(id, 'completed', w.driverA.token), { status: 400, message: 'status_transition_not_allowed' }, 'driver complete');
+  expectError(await st(id, 'completed', w.sellerA.token), { status: 400, message: 'status_transition_not_allowed' }, 'seller complete');
   expectError(await st(id, 'completed', w.customerB.token), { status: 400, message: 'status_transition_not_allowed' }, 'customer lain');
-  expectOk(await st(id, 'completed', w.customerA.token), 'completed oleh customer (completion_actor default)');
+  expectOk(await st(id, 'completed', w.customerA.token), 'completed oleh customer (aktor dikonfigurasi eksplisit)');
   expectError(await st(id, 'completed', w.customerA.token), { status: 400, message: 'status_transition_not_allowed' }, 'ulang');
 });
 

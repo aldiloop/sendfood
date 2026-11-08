@@ -51,10 +51,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - name: Pasang PostgreSQL 16 (initdb, pg_ctl, psql)
+      - name: Pasang PostgreSQL 16.2 (pgserver, sama dengan run lokal)
+        # Runner ubuntu-latest (26.04) tidak menyediakan paket postgresql-16.
         run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-16
-          echo "PG_BIN=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
+          python3 -m venv .pgtools/venv
+          .pgtools/venv/bin/pip install --quiet pgserver==0.1.4
+          echo "PG_BIN=$(ls -d "$PWD"/.pgtools/venv/lib/python3*/site-packages/pgserver/pginstall/bin)" >> "$GITHUB_ENV"
       - name: Ambil biner resmi PostgREST dan Supabase Auth
         run: bash backend/tests/stack/fetch_bins.sh
       - name: Jalankan stack HTTP

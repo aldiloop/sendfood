@@ -42,10 +42,9 @@ create table if not exists public.ops_policy (
 alter table public.ops_policy enable row level security;
 revoke all on table public.ops_policy from public, anon, authenticated;
 
--- Defaults are fail-closed except completion_actor, which keeps the existing
--- provisional convention (customer confirms receipt).
+-- All defaults are fail-closed. completion_actor deliberately has NO row: until an operator sets it
+-- explicitly, change_order_status rejects `completed` (completion_policy_not_configured) for every role.
 insert into public.ops_policy (key, value) values
-  ('completion_actor', 'customer'),
   ('cancellation_enabled', 'false'),
   ('manual_transfer_enabled', 'false'),
   ('cod_collection_recording_enabled', 'false')
@@ -848,7 +847,15 @@ begin
     raise exception using errcode = 'P0001', message = 'status_transition_not_allowed';
   end if;
 
-  v_completion_actor := coalesce(public.ops_policy_value('completion_actor'), 'customer');
+  -- Completion actor is a business decision that is not approved yet: no default and no fallback.
+  -- Missing/invalid policy rejects `completed` for EVERY role, admin included, before any role check.
+  -- Operators configure it explicitly with provision_set_policy('completion_actor', ...).
+  if p_new_status = 'completed' then
+    v_completion_actor := public.ops_policy_value('completion_actor');
+    if v_completion_actor is null or v_completion_actor not in ('customer', 'seller', 'driver') then
+      raise exception using errcode = 'P0001', message = 'completion_policy_not_configured';
+    end if;
+  end if;
 
   if v_role = 'admin' then
     v_allowed := true;
@@ -860,7 +867,7 @@ begin
     v_allowed := (v_order.order_status = 'ready_for_pickup' and p_new_status = 'picked_up')
       or (v_order.order_status = 'picked_up' and p_new_status = 'delivered');
   end if;
-  -- Completion actor is operator-configured (default: customer).
+  -- Completion actor is operator-configured (no default; checked above).
   if not v_allowed and v_order.order_status = 'delivered' and p_new_status = 'completed' then
     v_allowed := (v_completion_actor = 'customer' and v_role = 'customer' and v_order.customer_id = auth.uid())
       or (v_completion_actor = 'seller' and v_role = 'seller' and v_is_store_owner)

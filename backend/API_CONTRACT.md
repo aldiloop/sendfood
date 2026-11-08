@@ -69,7 +69,7 @@ Transisi:
 - `accepted` → `preparing` (seller toko)
 - `preparing` → `ready_for_pickup` (seller toko)
 - `ready_for_pickup` → `picked_up` → `delivered` (driver yang ditugaskan)
-- `delivered` → `completed` (aktor ditentukan `ops_policy.completion_actor`: `customer` (default, konvensi sementara), `seller`, atau `driver`; admin selalu dapat)
+- `delivered` → `completed`: **tertutup secara default**. Migrasi tidak membuat baris `completion_actor`; selama baris itu tidak ada atau nilainya bukan `customer`/`seller`/`driver`, `completed` ditolak `completion_policy_not_configured` untuk SEMUA peran (termasuk admin) sampai operator menyetel `completion_actor` secara eksplisit lewat `provision_set_policy('completion_actor', 'customer'|'seller'|'driver')` (hanya `service_role`/`postgres`). Order dan history tidak berubah saat ditolak. Setelah dikonfigurasi: hanya aktor itu (customer pemilik / seller pemilik toko / driver yang ditugaskan) dan admin (override kontrak) yang boleh. Aktor mana yang dipakai adalah keputusan bisnis yang belum ditetapkan.
 - Admin dapat melakukan transisi yang sama, tetapi tidak dapat melompati tahapan.
 
 `cancelled` ditolak dengan `cancellation_policy_not_configured` selama `ops_policy.cancellation_enabled` bukan `true` atau `cancellation_allowed_statuses` kosong (default: tertutup). Jika operator mengaktifkannya: hanya dari status yang terdaftar (selain itu `status_transition_not_allowed`), alasan wajib (`cancellation_reason_required`), dan aktor yang boleh adalah admin, customer pemilik, atau seller toko. Pembatalan **tidak** mengubah `payment_status`; refund belum ada. Setiap transisi sah dicatat di `order_status_history`.
@@ -370,7 +370,7 @@ Fungsi/trigger berikut adalah detail implementasi. Jangan dipanggil atau dibangu
 ### Aturan perilaku yang wajib dipatuhi UI
 
 - `manual_transfer` **selalu ditolak** `manual_transfer_not_configured`, bahkan bila `ops_policy.manual_transfer_enabled=true`. Jangan tampilkan sebagai pilihan.
-- Pembatalan (`cancellation_policy_not_configured`) dan pencatatan COD (`cod_collection_policy_not_configured`) **fail closed** (tertutup) sampai operator mengatur `ops_policy`. UI harus menangani kedua error tersebut.
+- Penyelesaian pesanan (`completion_policy_not_configured`), pembatalan (`cancellation_policy_not_configured`) dan pencatatan COD (`cod_collection_policy_not_configured`) **fail closed** (tertutup) sampai operator mengatur `ops_policy`. UI harus menangani kedua error tersebut.
 - `delivered`/`completed` **tidak sama dengan lunas**. Hanya `record_cod_collection` yang mengubah `payment_status` menjadi `verified`; tampilkan `payment_status` apa adanya.
 - Frontend **selalu mengirim `p_idempotency_key`** pada `create_order` (kunci baru per percobaan checkout, dipakai ulang hanya saat retry).
 - Catatan: `status_unchanged` hanya ada di `change_order_status` versi foundation yang sudah digantikan; versi hardening tidak memunculkannya, jadi tidak perlu ditangani.
@@ -380,7 +380,7 @@ Fungsi/trigger berikut adalah detail implementasi. Jangan dipanggil atau dibangu
 1. `create_order` memiliki argumen ke-8 `p_idempotency_key`; kirim selalu. Fungsi 7 argumen lama diganti (drop) oleh migrasi.
 2. Tabel `orders`, `order_items`, `order_status_history` kini ditolak untuk tulis langsung dari client (`direct_write_forbidden`); profil tidak bisa mengubah role (`profile_role_change_forbidden`).
 3. Gunakan `list_stores`/`search_products`/`list_my_orders` untuk katalog dan riwayat dengan pagination; `completed` tidak berarti lunas, tampilkan `payment_status` apa adanya.
-4. Cancel, transfer manual, dan pencatatan COD tetap tertutup sampai operator mengatur kebijakan; UI harus menangani `cancellation_policy_not_configured`, `manual_transfer_not_configured`, `cod_collection_policy_not_configured`.
+4. Cancel, transfer manual, dan pencatatan COD tetap tertutup sampai operator mengatur kebijakan; UI harus menangani `cancellation_policy_not_configured`, `manual_transfer_not_configured`, `cod_collection_policy_not_configured`, `completion_policy_not_configured`.
 5. Rating tidak ada (P2, ditunda).
 
 ## Status dan error yang perlu ditangani UI
@@ -389,7 +389,7 @@ Status pesanan: `pending_seller`, `accepted`, `rejected`, `preparing`, `ready_fo
 
 Metode pembayaran: `cod`, `manual_transfer` (belum aktif untuk checkout). Status pembayaran tersedia sebagai enum; pencatatan COD tersedia lewat `record_cod_collection` (tertutup secara default), sedangkan verifikasi transfer manual belum memiliki workflow.
 
-Pesan error RPC yang umum: `authentication_required`, `customer_role_required`, `store_not_available`, `store_delivery_not_configured`, `outside_store_service_radius`, `product_unavailable_or_wrong_store`, `invalid_product_price` (harga produk NaN/legacy tidak valid), `order_not_cod`, `order_not_delivered`, `payment_already_recorded`, `cod_collection_policy_not_configured`, `address_limit_reached`, `manual_transfer_not_configured`, `status_transition_not_allowed`, `cancellation_policy_not_configured`, `admin_role_required`, `driver_profile_required`, `invalid_idempotency_key`, `idempotency_key_conflict`, `items_must_be_array`, `item_count_out_of_range`, `invalid_order_item`, `duplicate_product_in_items`, `delivery_address_required`, `delivery_note_too_long`, `valid_delivery_coordinates_required`, `order_subtotal_unavailable`, `order_not_found`, `order_not_assignable`, `driver_not_assigned`, `rejection_reason_required`, `cancellation_reason_required`, `status_note_too_long`, `direct_write_forbidden`. Semua memakai `errcode P0001` dengan pesan snake_case.
+Pesan error RPC yang umum: `authentication_required`, `customer_role_required`, `store_not_available`, `store_delivery_not_configured`, `outside_store_service_radius`, `product_unavailable_or_wrong_store`, `invalid_product_price` (harga produk NaN/legacy tidak valid), `order_not_cod`, `order_not_delivered`, `payment_already_recorded`, `cod_collection_policy_not_configured`, `completion_policy_not_configured`, `address_limit_reached`, `manual_transfer_not_configured`, `status_transition_not_allowed`, `cancellation_policy_not_configured`, `admin_role_required`, `driver_profile_required`, `invalid_idempotency_key`, `idempotency_key_conflict`, `items_must_be_array`, `item_count_out_of_range`, `invalid_order_item`, `duplicate_product_in_items`, `delivery_address_required`, `delivery_note_too_long`, `valid_delivery_coordinates_required`, `order_subtotal_unavailable`, `order_not_found`, `order_not_assignable`, `driver_not_assigned`, `rejection_reason_required`, `cancellation_reason_required`, `status_note_too_long`, `direct_write_forbidden`. Semua memakai `errcode P0001` dengan pesan snake_case.
 
 UI harus menampilkan pesan yang ramah dan tidak memaparkan SQL/detail internal. Pertahankan keranjang ketika checkout gagal.
 

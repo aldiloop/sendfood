@@ -40,7 +40,7 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 | 2 | Mekanisme assignment driver | Pilih: admin saja, penjual, atau driver self-claim (butuh RPC baru) | Hanya `assign_order_driver` oleh admin |
 | 3 | Verifikator transfer manual, bukti, rekening | Aktor verifikasi, format bukti (tabel/storage), info rekening, `manual_transfer_enabled`, plus pengembangan workflow | Ditolak; workflow belum ada |
 | 4 | Pembatalan dan refund | `cancellation_enabled=true`, `cancellation_allowed_statuses` (mis. `pending_seller,accepted`), aturan refund | Ditutup. `payment_status` tidak disentuh saat batal; refund belum ada |
-| 5 | Aktor `completed` | `completion_actor` = `customer` / `seller` / `driver` | Default `customer` (konvensi sementara, belum disetujui) |
+| 5 | Aktor `completed` | `completion_actor` = `customer` / `seller` / `driver` | Ditutup: tanpa baris kebijakan `completed` ditolak `completion_policy_not_configured` untuk semua peran termasuk admin |
 | 6 | Pencatatan COD | `cod_collection_recording_enabled=true`, `cod_collection_actor` = `driver` / `admin`; prosedur setoran/rekonsiliasi di luar sistem | Ditutup. `delivered`/`completed` tidak pernah menandai lunas; `record_cod_collection` menandai `verified` (arti COD: tunai diterima, bukan verifikasi transfer). Admin selalu boleh mencatat saat flag aktif, apa pun `cod_collection_actor` |
 
 ## Gap lain yang diketahui

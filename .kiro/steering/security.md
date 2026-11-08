@@ -14,7 +14,7 @@ inclusion: always
 Transfer manual, pembatalan, dan pencatatan COD ditolak sampai operator mengatur `ops_policy` lewat `provision_*` (hanya `service_role`). Jangan membuka lewat kode tanpa keputusan bisnis. `delivered`/`completed` tidak pernah menandai lunas. Order tidak bisa ditulis langsung oleh client; harga dihitung server.
 
 ## Skrip lokal dan penjaganya
-- `backend/scripts/apply_migration_local.sh`: hanya host localhost/127.0.0.1/::1/socket dan DB berawalan `sendfood_`; selalu `ON_ERROR_STOP=1`; gagal exit 3. Bukan alat deploy.
+- `backend/scripts/apply_migration_local.sh`: hanya host localhost/127.0.0.1/::1/socket dan DB berawalan `sendfood_`; selalu `ON_ERROR_STOP=1`; kontrol transaksi top-level dipindai dulu (`sql_tx_scan.py`, hanya tanpa-kontrol atau satu BEGIN awal + satu COMMIT akhir; lainnya exit 65); gagal eksekusi exit 3. Bukan alat deploy.
 - Runner tes menolak host non-lokal; shim menolak jika schema `auth` sudah ada atau DB bukan `sendfood_test_*`.
 - `psql -f` tanpa `ON_ERROR_STOP` keluar 0 saat gagal; selalu pakai `-v ON_ERROR_STOP=1`.
 
@@ -23,3 +23,4 @@ Hitung baris `= 'NaN'::numeric` pada `products.price`, `stores.delivery_fee`, `s
 
 ## Risiko yang didokumentasikan
 Access token tetap valid sampai `exp` setelah logout (JWT stateless); jaga `exp` pendek. Storage belum diuji sehingga tidak ada bucket/policy.
+- Kebijakan bisnis yang belum diputuskan tidak boleh punya default diam-diam. `completion_actor` tanpa baris = `completed` ditolak untuk semua peran; tes boleh menyetelnya HANYA di DB sekali pakai lewat `provision_set_policy`, ditandai fixture sintetis.

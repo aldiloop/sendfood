@@ -103,6 +103,10 @@ select public.provision_set_user_role('20000000-0000-0000-0000-00000000000b', 's
 select public.provision_set_user_role('30000000-0000-0000-0000-00000000000a', 'driver', 'fixture');
 select public.provision_set_user_role('30000000-0000-0000-0000-00000000000b', 'driver', 'fixture');
 select public.provision_set_user_role('40000000-0000-0000-0000-000000000001', 'admin', 'fixture');
+-- FIXTURE SINTETIS (DB sekali pakai), BUKAN keputusan bisnis: migrasi tidak menyetel aktor completion,
+-- jadi tes alur yang sampai `completed` menyetelnya eksplisit lewat provisioning tepercaya.
+-- Regresi tanpa kebijakan ada di 80_completion_policy.sql.
+select public.provision_set_policy('completion_actor', 'customer');
 
 -- Toko A (seller A): aktif, terkonfigurasi. Toko B (seller B): aktif, terkonfigurasi.
 -- Toko Nonaktif (seller A). Toko Belum Setting (seller B): aktif tanpa fee/radius.

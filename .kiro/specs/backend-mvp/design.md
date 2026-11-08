@@ -12,7 +12,7 @@ Tabel: `profiles`, `stores`, `products`, `orders`, `order_items`, `order_status_
 - Grant minimal: setiap fungsi baru `revoke` lalu `grant` eksplisit karena default privileges Supabase.
 
 ## Fail closed
-`ops_policy` menyimpan kebijakan (`cancellation_enabled`, `cancellation_allowed_statuses`, `manual_transfer_enabled`, `cod_collection_recording_enabled`, `cod_collection_actor`, `completion_actor`). Nilai default menolak. `manual_transfer` tetap ditolak walau flag aktif karena workflow belum ada.
+`ops_policy` menyimpan kebijakan (`cancellation_enabled`, `cancellation_allowed_statuses`, `manual_transfer_enabled`, `cod_collection_recording_enabled`, `cod_collection_actor`, `completion_actor`). Nilai default menolak; `completion_actor` sengaja tidak punya baris default sehingga `completed` ditolak `completion_policy_not_configured` untuk semua peran termasuk admin. `manual_transfer` tetap ditolak walau flag aktif karena workflow belum ada.
 
 ## Integritas angka
 Constraint `*_not_nan` pada harga, ongkir, radius, jumlah order dan item. `create_order` memperlakukan data NaN sebagai tidak terkonfigurasi atau di luar radius. Haversine garis lurus adalah asumsi sementara.

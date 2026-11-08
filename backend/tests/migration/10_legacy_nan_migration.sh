@@ -183,6 +183,11 @@ check "legacy bersih: constraint products_price_not_nan ada dan tervalidasi" \
   "$(sql "$DB_C" -At -c "select count(*) from pg_constraint where conrelid='public.products'::regclass and conname='products_price_not_nan' and contype='c' and convalidated")" "1"
 check "legacy bersih: create_order memuat guard invalid_product_price" \
   "$(sql "$DB_C" -At -c "select (pg_get_functiondef(p.oid) like '%invalid_product_price%')::text from pg_proc p where p.proname='create_order' and p.pronamespace='public'::regnamespace")" "true"
+check "legacy bersih: migrasi TIDAK membuat default completion_actor (fail-closed)" \
+  "$(sql "$DB_C" -At -c "select count(*) from public.ops_policy where key = 'completion_actor'")" "0"
+check "legacy bersih: kebijakan lain default tertutup" \
+  "$(sql "$DB_C" -At -c "select string_agg(key||'='||value, ',' order by key) from public.ops_policy")" \
+  "cancellation_enabled=false,cod_collection_recording_enabled=false,manual_transfer_enabled=false"
 check "legacy bersih: baris produk lama tetap (jumlah)" \
   "$(sql "$DB_C" -At -c "select count(*) from public.products")" "1"
 check "legacy bersih: harga produk lama tidak berubah" \
@@ -262,3 +267,57 @@ for col in delivery_fee service_radius_km; do
   check "legacy $col NaN: nilai NaN legacy tetap ada" \
     "$(sql "$DB_G" -At -c "select count(*) from public.stores where $col = 'NaN'::numeric")" "1"
 done
+
+# ---------- H. Runner: kontrol transaksi top-level divalidasi SEBELUM eksekusi ----------
+# Bug sebelumnya (8429a92): berkas `BEGIN;..COMMIT; BEGIN;..ERROR;COMMIT;` lolos dan meninggalkan commit parsial.
+mkdb runner; DB_H="$MKDB"
+runner_on() { PGDATABASE="$DB_H" SENDFOOD_MIGRATION_ALLOW_DB_PREFIX=sendfood_test_ PG_BIN="$BIN" bash "$RUNNER" "$1" >"$1.out" 2>"$1.err"; }
+left() { sql "$DB_H" -At -c "select coalesce(string_agg(relname, ',' order by relname), 'none') from pg_class where relname like 'rx\_%'"; }
+H="$TMP/rx"; mkdir -p "$H"
+printf 'begin;\ncreate table public.rx_a(x int);\ncommit;\nbegin;\ncreate table public.rx_b(x int);\nselect 1/0;\ncommit;\n' > "$H/two_tx.sql"
+printf 'begin;\ncreate table public.rx_c(x int);\ncommit;\ncreate table public.rx_d(x int);\n' > "$H/commit_mid.sql"
+printf 'begin;\ncreate table public.rx_e(x int);\nsavepoint s1;\nrollback to savepoint s1;\ncommit;\n' > "$H/savepoint.sql"
+printf 'begin;\ncreate table public.rx_f(x int);\nend;\n' > "$H/end_kw.sql"
+printf 'create table public.rx_g(x int);\ncommit;\n' > "$H/commit_only.sql"
+printf 'create table public.rx_h(x int);\n\\! echo meta\n' > "$H/meta.sql"
+printf 'create function public.rx_fn() returns int language sql begin atomic select 1; end;\n' > "$H/atomic.sql"
+for c in two_tx commit_mid savepoint end_kw commit_only meta atomic; do
+  runner_on "$H/$c.sql"; rc=$?
+  check "runner: berkas $c ditolak exit 65 sebelum eksekusi" "$rc" "65"
+  if grep -q 'DITOLAK' "$H/$c.sql.err"; then pass "runner: $c pesan DITOLAK"; else fail "runner: $c pesan" "$(tr '\n' ' ' < "$H/$c.sql.err" | cut -c1-200)"; fi
+done
+check "runner: tidak ada tabel tertinggal dari berkas yang ditolak" "$(left)" "none"
+note "runner two_tx: $(tr '\n' ' ' < "$H/two_tx.sql.err")"
+
+# Jebakan: BEGIN/COMMIT/END di komentar, string, identifier ber-kutip, dollar-quote dan body PL/pgSQL BUKAN kontrol transaksi.
+cat > "$H/tricky_ok.sql" <<'SQL'
+-- komentar: begin; commit;
+/* komentar /* bersarang: commit; */ end; */
+create table public.rx_ok(x text, "commit;" int);
+insert into public.rx_ok(x) values ('begin; commit; end;'), (E'it\'s; commit;');
+create function public.rx_okfn() returns int language plpgsql as $fn$
+begin
+  -- commit; di dalam body
+  return 1;
+end;
+$fn$;
+do $$ begin perform 1; end $$;
+SQL
+runner_on "$H/tricky_ok.sql"; rc=$?
+check "runner: jebakan (komentar/string/dollar-quote) diterima dan berhasil" "$rc" "0"
+check "runner: jebakan membuat objek yang benar" \
+  "$(sql "$DB_H" -At -c "select count(*)||'/'||(select public.rx_okfn()) from public.rx_ok")" "2/1"
+sql "$DB_H" -c "drop table public.rx_ok; drop function public.rx_okfn();" >/dev/null
+sed 's/^do \$\$ begin perform 1; end \$\$;$/do $$ begin perform 1; end $$;\nselect 1\/0;/' "$H/tricky_ok.sql" > "$H/tricky_fail.sql"
+runner_on "$H/tricky_fail.sql"; rc=$?
+check "runner: jebakan + error di akhir keluar 3" "$rc" "3"
+check "runner: jebakan + error di-rollback seluruhnya (dibungkus satu transaksi)" "$(left)" "none"
+check "runner: fungsi jebakan tidak tertinggal" "$(sql "$DB_H" -At -c "select count(*) from pg_proc where proname='rx_okfn'")" "0"
+
+# Berkas own (BEGIN pertama + COMMIT terakhir) dengan error di tengah -> rollback penuh.
+printf 'begin;\ncreate table public.rx_own(x int);\ninsert into public.rx_own values (1);\nselect 1/0;\ncommit;\n' > "$H/own_fail.sql"
+runner_on "$H/own_fail.sql"; rc=$?
+check "runner: berkas own gagal keluar 3" "$rc" "3"
+check "runner: berkas own gagal tidak meninggalkan tabel" "$(left)" "none"
+check "runner: pemindai mengklasifikasi migrasi repo (fondasi=wrap, hardening=own)" \
+  "$(python3 "$ROOT/backend/scripts/sql_tx_scan.py" "$FOUNDATION")/$(python3 "$ROOT/backend/scripts/sql_tx_scan.py" "$HARDENING")" "wrap/own"

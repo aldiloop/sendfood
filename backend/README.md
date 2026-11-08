@@ -62,9 +62,9 @@ Hasil aktual (perintah, versi, hitungan, exit code) dicatat di [TEST_EVIDENCE.md
 
 ## CI
 
-`.github/workflows/backend-tests.yml` kini punya dua job: `runtime-tests` (suite SQL terhadap service container Postgres 16, `SENDFOOD_TEST_PGHOST=127.0.0.1`) dan `http-stack-tests` (tumpukan HTTP nyata). Action dipin ke SHA commit (checkout v7.0.1, setup-node v7.1.0).
+`.github/workflows/backend-tests.yml` kini punya dua job: `runtime-tests` (suite SQL terhadap service container Postgres 16, `SENDFOOD_TEST_PGHOST=127.0.0.1`) dan `http-stack-tests` (tumpukan HTTP nyata; PostgreSQL 16.2 dari `pgserver==0.1.4` karena runner ubuntu-latest 26.04 tidak menyediakan paket `postgresql-16`). Action dipin ke SHA commit (checkout v7.0.1, setup-node v7.1.0).
 
-Riwayat: workflow versi lama (hanya job SQL) pernah lulus di GitHub untuk commit `41eb679` ([run 42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072) pull_request, [run 42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122) push) dan `22e5133` ([run 42342881893](https://github.com/aldiloop/sendfood/actions/runs/42342881893) pull_request, [run 42342878043](https://github.com/aldiloop/sendfood/actions/runs/42342878043) push). **Workflow dua-job yang baru belum pernah dijalankan di CI untuk commit terbaru**; cek tab Actions. CI membuktikan hanya apa yang diuji (Postgres lokal, GoTrue/PostgREST lokal), bukan staging atau produksi Supabase.
+Riwayat: workflow versi lama (hanya job SQL) pernah lulus di GitHub untuk commit `41eb679` ([run 42342259072](https://github.com/aldiloop/sendfood/actions/runs/42342259072) pull_request, [run 42342249122](https://github.com/aldiloop/sendfood/actions/runs/42342249122) push) dan `22e5133` ([run 42342881893](https://github.com/aldiloop/sendfood/actions/runs/42342881893) pull_request, [run 42342878043](https://github.com/aldiloop/sendfood/actions/runs/42342878043) push). Workflow dua-job pertama kali berjalan pada `8429a92`: `runtime-tests` lulus, `http-stack-tests` gagal sebelum tes (`E: Unable to locate package postgresql-16`); diperbaiki dengan `pgserver`. Status commit terbaru: lihat checks PR #1 dan `TEST_EVIDENCE.md`. CI membuktikan hanya apa yang diuji (Postgres lokal, GoTrue/PostgREST lokal), bukan staging atau produksi Supabase.
 
 ## Provisioning admin dan kebijakan (lingkungan tepercaya)
 
@@ -86,7 +86,8 @@ PGHOST=127.0.0.1 PGPORT=<port> PGUSER=<user> PGDATABASE=sendfood_<nama> bash bac
 ```
 
 - Hanya menerima `PGHOST` `localhost`/`127.0.0.1`/`::1`/path socket dan `PGDATABASE` berawalan `sendfood_` (prefiks lain hanya lewat `SENDFOOD_MIGRATION_ALLOW_DB_PREFIX`). Selain itu ditolak.
-- Selalu `psql -X -v ON_ERROR_STOP=1`; berkas tanpa `BEGIN`/`COMMIT` sendiri dibungkus `--single-transaction`; berkas dengan kontrol transaksi di tengah ditolak.
+- Sebelum menyentuh database, `scripts/sql_tx_scan.py` memindai statement top-level (komentar, string, identifier ber-kutip dan dollar-quote dilewati, jadi `BEGIN`/`END` di body fungsi tidak salah dibaca). Diterima hanya: (a) tanpa kontrol transaksi sama sekali, dibungkus `--single-transaction`; atau (b) tepat satu `BEGIN` sebagai statement pertama dan satu `COMMIT` terakhir. Selain itu (BEGIN/COMMIT ganda, `END`, `ROLLBACK`, `SAVEPOINT`, psql meta-command `\...`, `BEGIN ATOMIC`) ditolak exit 65 tanpa eksekusi. Versi runner sebelumnya (`8429a92`) meloloskan `BEGIN;..COMMIT; BEGIN;..ERROR;COMMIT;` dan meninggalkan commit parsial; diperbaiki dan diuji (`tests/migration/10_legacy_nan_migration.sh` bagian H).
+- Selalu `psql -X -v ON_ERROR_STOP=1`.
 - Gagal: exit 3 dengan pesan `MIGRASI GAGAL (exit 3): <berkas> di-rollback seluruhnya.`
 - Ini **bukan alat deploy produksi**; jangan diarahkan ke database Supabase.
 
