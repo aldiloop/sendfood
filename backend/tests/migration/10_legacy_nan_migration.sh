@@ -281,7 +281,23 @@ printf 'begin;\ncreate table public.rx_f(x int);\nend;\n' > "$H/end_kw.sql"
 printf 'create table public.rx_g(x int);\ncommit;\n' > "$H/commit_only.sql"
 printf 'create table public.rx_h(x int);\n\\! echo meta\n' > "$H/meta.sql"
 printf 'create function public.rx_fn() returns int language sql begin atomic select 1; end;\n' > "$H/atomic.sql"
-for c in two_tx commit_mid savepoint end_kw commit_only meta atomic; do
+cat > "$H/inline_gexec.sql" <<'SQL'
+begin;
+create table public.rx_i(x int);
+select 'commit' \gexec
+select 1/0;
+commit;
+SQL
+cat > "$H/semicolon_meta.sql" <<'SQL'
+begin;
+create table public.rx_j(x int);
+select 1; \gset
+commit;
+SQL
+cat > "$H/inline_g.sql" <<'SQL'
+create table public.rx_k(x int); select 'commit' \g
+SQL
+for c in two_tx commit_mid savepoint end_kw commit_only meta atomic inline_gexec semicolon_meta inline_g; do
   runner_on "$H/$c.sql"; rc=$?
   check "runner: berkas $c ditolak exit 65 sebelum eksekusi" "$rc" "65"
   if grep -q 'DITOLAK' "$H/$c.sql.err"; then pass "runner: $c pesan DITOLAK"; else fail "runner: $c pesan" "$(tr '\n' ' ' < "$H/$c.sql.err" | cut -c1-200)"; fi
@@ -295,6 +311,8 @@ cat > "$H/tricky_ok.sql" <<'SQL'
 /* komentar /* bersarang: commit; */ end; */
 create table public.rx_ok(x text, "commit;" int);
 insert into public.rx_ok(x) values ('begin; commit; end;'), (E'it\'s; commit;');
+-- backslash sah di dalam literal; \gexec \! di komentar diabaikan
+insert into public.rx_ok(x) values (E'back\\slash \\gexec'), ('std \gexec'), ($q$dollar \gexec \! $q$);
 create function public.rx_okfn() returns int language plpgsql as $fn$
 begin
   -- commit; di dalam body
@@ -306,7 +324,7 @@ SQL
 runner_on "$H/tricky_ok.sql"; rc=$?
 check "runner: jebakan (komentar/string/dollar-quote) diterima dan berhasil" "$rc" "0"
 check "runner: jebakan membuat objek yang benar" \
-  "$(sql "$DB_H" -At -c "select count(*)||'/'||(select public.rx_okfn()) from public.rx_ok")" "2/1"
+  "$(sql "$DB_H" -At -c "select count(*)||'/'||(select public.rx_okfn()) from public.rx_ok")" "5/1"
 sql "$DB_H" -c "drop table public.rx_ok; drop function public.rx_okfn();" >/dev/null
 sed 's/^do \$\$ begin perform 1; end \$\$;$/do $$ begin perform 1; end $$;\nselect 1\/0;/' "$H/tricky_ok.sql" > "$H/tricky_fail.sql"
 runner_on "$H/tricky_fail.sql"; rc=$?

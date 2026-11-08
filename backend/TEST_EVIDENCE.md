@@ -2,7 +2,7 @@
 
 Semua hasil di bawah berasal dari run **lokal** (Postgres sekali pakai, GoTrue dan PostgREST nyata di 127.0.0.1). Tidak ada kontak ke Supabase cloud. Ini bukti kesiapan backend lokal, **bukan** kesiapan pilot/produksi.
 
-> Run final: 2026-11-08, pohon kerja di atas `8429a92` dengan seluruh perubahan commit ini (kode final identik dengan commit yang memuat file ini). Hanya dokumen yang diubah setelah run final.
+> Run final: 2026-11-08, pohon kerja di atas `708bed1` dengan seluruh perubahan commit ini (kode final identik dengan commit yang memuat file ini). Hanya dokumen yang diubah setelah run final.
 
 ## Lingkungan
 
@@ -18,9 +18,9 @@ Semua hasil di bawah berasal dari run **lokal** (Postgres sekali pakai, GoTrue d
 
 | Suite | Perintah | Lulus | Gagal | Dilewati | Exit code | Tanggal | Commit |
 |---|---|---|---|---|---|---|---|
-| SQL (Postgres + shim; bukan Auth/PostgREST) | `PG_BIN=<pg bin> bash backend/tests/run.sh` | 501 | 0 | 0 | 0 | 2026-11-08 | commit ini |
+| SQL (Postgres + shim; bukan Auth/PostgREST) | `PG_BIN=<pg bin> bash backend/tests/run.sh` | 507 | 0 | 0 | 0 | 2026-11-08 | commit ini |
 | HTTP stack (Postgres + GoTrue + PostgREST) | `PG_BIN=<pg bin> bash backend/tests/stack/run_stack.sh` | 47 | 0 | 0 | 0 | 2026-11-08 | commit ini |
-| Gabungan | `PG_BIN=<pg bin> bash backend/tests/all.sh` | 548 | 0 | 0 | 0 | 2026-11-08 | commit ini |
+| Gabungan | `PG_BIN=<pg bin> bash backend/tests/all.sh` | 554 | 0 | 0 | 0 | 2026-11-08 | commit ini |
 
 Cakupan HTTP: `00_stack_surface`, `10_auth_jwt`, `20_cod_flow`, `30_checkout_negative`, `40_rls_matrix`. Log mentah run final (disanitasi, JWT tidak tercetak) diekspor di luar repo sebagai `sendfood-backend-final-tests.log`.
 
@@ -29,7 +29,7 @@ Cakupan HTTP: `00_stack_surface`, `10_auth_jwt`, `20_cod_flow`, `30_checkout_neg
 | Keadaan | Hasil | Sumber |
 |---|---|---|
 | Sebelum perbaikan (fixture lokal, tes `70_store_nonfinite`) | lulus=416, gagal=18; ongkir NaN menghasilkan total NaN, radius NaN menerima alamat ~60 km, `list_stores` melaporkan `within_service_radius=true` | log lokal `sendfood-backend-final-nonfinite-before-fix.log` (di luar repo, tidak di-commit) |
-| Setelah perbaikan (hardening maju) | suite SQL lulus=501 gagal=0 (di atas); kolom NaN ditolak constraint `23514`; `create_order` tertutup; `within_service_radius=null` | `tests/runtime/60_price_nan.sql`, `70_store_nonfinite.sql`, `tests/migration/10_legacy_nan_migration.sh` |
+| Setelah perbaikan (hardening maju) | suite SQL lulus=507 gagal=0 (di atas); kolom NaN ditolak constraint `23514`; `create_order` tertutup; `within_service_radius=null` | `tests/runtime/60_price_nan.sql`, `70_store_nonfinite.sql`, `tests/migration/10_legacy_nan_migration.sh` |
 
 ## Penutupan gate tambahan (run final yang sama)
 
@@ -37,7 +37,8 @@ Cakupan HTTP: `00_stack_surface`, `10_auth_jwt`, `20_cod_flow`, `30_checkout_neg
 |---|---|---|
 | Aktor `completed` tanpa kebijakan | `c122079`/`8429a92`: seed `completion_actor=customer`, fallback `coalesce(...,'customer')`, admin selalu boleh | Tanpa baris/nilai tidak valid: semua peran termasuk admin ditolak `completion_policy_not_configured`, order/history tidak berubah (`runtime/80_completion_policy.sql`, `http/20_cod_flow`) |
 | Runner menerima `BEGIN;..COMMIT; BEGIN;..ERROR;COMMIT;` | runner `8429a92`: exit 3 dan pesan "di-rollback seluruhnya" tetapi tabel `tx_a` tertinggal (log `sendfood-backend-final-runner-before-fix.log`, di luar repo) | Ditolak exit 65 sebelum eksekusi; jebakan komentar/string/dollar-quote diterima; tidak ada tabel tertinggal (`migration/10_legacy_nan_migration.sh` bagian H) |
-| CI `http-stack-tests` | `8429a92`: gagal `E: Unable to locate package postgresql-16` (runner 26.04) | PostgreSQL 16.2 via `pgserver==0.1.4` |
+| CI `http-stack-tests` | `8429a92`: gagal `E: Unable to locate package postgresql-16` (runner 26.04) | PostgreSQL 16.2 via `pgserver==0.1.4`; `708bed1` masih gagal karena Python runner tidak punya wheel pgserver -> `actions/setup-python` (Python 3.11, dipin SHA) |
+| Meta-command inline `select 'commit' \gexec` | runner `708bed1`: pemindai `own`, exit 3 "di-rollback seluruhnya" tetapi tabel `rx_q` tertinggal (log `sendfood-backend-final-gexec-before-fix.log`, di luar repo) | Semua backslash di luar komentar/literal ditolak exit 65 sebelum eksekusi (`inline_gexec`, `semicolon_meta`, `inline_g`); `E'..\\..'`, string standar dan dollar-quote yang memuat backslash tetap lulus |
 
 ## CI
 

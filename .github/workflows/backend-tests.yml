@@ -51,10 +51,14 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # pgserver 0.1.4 hanya menyediakan wheel cp39-cp312.
+          python-version: '3.11'
       - name: Pasang PostgreSQL 16.2 (pgserver, sama dengan run lokal)
         # Runner ubuntu-latest (26.04) tidak menyediakan paket postgresql-16.
         run: |
-          python3 -m venv .pgtools/venv
+          python -m venv .pgtools/venv
           .pgtools/venv/bin/pip install --quiet pgserver==0.1.4
           echo "PG_BIN=$(ls -d "$PWD"/.pgtools/venv/lib/python3*/site-packages/pgserver/pginstall/bin)" >> "$GITHUB_ENV"
       - name: Ambil biner resmi PostgREST dan Supabase Auth

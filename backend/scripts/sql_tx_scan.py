@@ -6,7 +6,7 @@ Keluaran (stdout) satu kata lalu exit 0:
   own     -> tepat satu BEGIN sebagai statement pertama dan satu COMMIT sebagai statement terakhir,
              tanpa kontrol transaksi lain di antaranya
 Ditolak (stderr, exit 65): kontrol transaksi lain (BEGIN/COMMIT ganda, END, ROLLBACK, SAVEPOINT, ...),
-psql meta-command (\\...), `BEGIN ATOMIC` (body fungsi SQL-standar yang tidak bisa dipisah aman),
+psql meta-command atau backslash apa pun di luar literal (termasuk inline `\\gexec`), `BEGIN ATOMIC` (body fungsi SQL-standar yang tidak bisa dipisah aman),
 atau literal/komentar/dollar-quote yang tidak tertutup.
 
 Komentar (-- dan /* */ bersarang), string '...' / E'...', identifier "..." dan dollar-quote $tag$...$tag$
@@ -27,7 +27,6 @@ def fail(msg):
 def statements(sql):
     """Memecah teks menjadi statement top-level; isi literal/komentar diganti spasi."""
     out, buf, i, n = [], [], 0, len(sql)
-    at_line_start = True
     while i < n:
         c = sql[i]
         if c == "-" and sql.startswith("--", i):
@@ -90,18 +89,15 @@ def statements(sql):
                 i = j + len(tag)
                 buf.append(" $$ ")
                 continue
-        if c == "\\" and at_line_start:
-            fail("psql meta-command (\\...) tidak diizinkan dalam berkas migrasi")
+        if c == "\\":
+            # Konservatif: SEMUA backslash di luar komentar/string/identifier/dollar-quote ditolak, termasuk
+            # meta-command inline seperti `select 'commit' \\gexec` yang bisa meng-commit transaksi luar.
+            fail("psql meta-command / backslash di luar literal tidak diizinkan dalam berkas migrasi")
         if c == ";":
             out.append("".join(buf))
             buf = []
             i += 1
-            at_line_start = False
             continue
-        if c == "\n":
-            at_line_start = True
-        elif not c.isspace():
-            at_line_start = False
         buf.append(c)
         i += 1
     tail = "".join(buf).strip()
