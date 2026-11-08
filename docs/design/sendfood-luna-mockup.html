@@ -353,11 +353,10 @@
           <div class="money"><span class="muted">Subtotal</span><span>Rp35.000</span></div>
           <div class="money"><span class="muted">Ongkir</span><span>Rp5.000</span></div>
           <div class="money total"><span>Total</span><span>Rp40.000</span></div>
-          <p class="xs muted" style="margin:4px 0 10px">Total final dihitung ulang oleh sistem saat pesanan dibuat.</p>
-          <button class="btn btn-primary">Buat Pesanan · Rp40.000</button>
+          <button class="btn btn-primary" style="margin-top:8px">Buat Pesanan · Rp40.000</button>
         </div>
       </div>
-      <figcaption>C4 · Keranjang & checkout<small>Hanya COD. Transfer manual tidak ditampilkan sampai alur verifikasi diputuskan.</small></figcaption>
+      <figcaption>C4 · Keranjang & checkout<small>Hanya COD. Transfer manual tidak ditampilkan sampai alur verifikasi diputuskan. Total final dihitung ulang backend.</small></figcaption>
     </figure>
 
     <!-- Status pesanan -->
@@ -513,14 +512,9 @@
           <div class="alert err"><span>✕</span><div><b>Alamat di luar jangkauan toko</b><br>Warung Bu Sari hanya mengantar dalam radius tertentu. Pilih alamat lain atau toko lain. Keranjangmu tetap tersimpan.</div></div>
           <div class="card" style="margin-top:10px"><div class="row between"><b class="sm">Alamat pengantaran</b><span class="badge b-err">Perlu diubah</span></div><p class="sm" style="margin-top:4px">Dusun Krajan, 7 km dari toko</p></div>
           <div class="stack" style="margin-top:12px"><button class="btn btn-primary">Ganti alamat</button><button class="btn btn-secondary">Cari toko lain</button></div>
-          <p class="xs muted bold" style="margin:18px 0 8px;letter-spacing:1px">PEMETAAN ERROR LAIN</p>
-          <div class="stack" style="gap:6px">
-            <div class="alert warn xs"><b>store_delivery_not_configured</b>&nbsp;→ “Toko ini belum menerima pesanan antar.”</div>
-            <div class="alert warn xs"><b>product_unavailable_or_wrong_store</b>&nbsp;→ “Ada menu yang habis. Periksa keranjang.”</div>
-          </div>
         </div>
       </div>
-      <figcaption>S3 · Error checkout<small><code>outside_store_service_radius</code> dan contoh pemetaan pesan.</small></figcaption>
+      <figcaption>S3 · Error checkout<small><code>outside_store_service_radius</code>. Pemetaan error lain ada di bagian aturan.</small></figcaption>
     </figure>
 
     <figure class="shot">
@@ -796,6 +790,17 @@
         <li><code>ready_for_pickup</code> Siap diambil</li>
         <li><code>picked_up</code> Sedang diantar · <code>delivered</code> Sampai di tujuan</li>
         <li><code>completed</code> Selesai</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Pemetaan error RPC (usulan teks)</h3>
+      <ul>
+        <li><code>outside_store_service_radius</code> Alamat di luar jangkauan toko.</li>
+        <li><code>store_delivery_not_configured</code> Toko ini belum menerima pesanan antar.</li>
+        <li><code>store_not_available</code> Toko sedang tidak tersedia.</li>
+        <li><code>product_unavailable_or_wrong_store</code> Ada menu yang habis. Periksa keranjang.</li>
+        <li><code>authentication_required</code> Masuk dulu untuk melanjutkan.</li>
+        <li><code>status_transition_not_allowed</code> Status pesanan sudah berubah. Muat ulang halaman.</li>
       </ul>
     </div>
     <div class="panel">
