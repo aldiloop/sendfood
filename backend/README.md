@@ -6,6 +6,7 @@ Backend foundation untuk schema Supabase, Row Level Security (RLS), RPC transaks
 - `migrations/20261107000000_sendfood_backend_foundation.sql` — migrasi fondasi PostgreSQL.
 - `API_CONTRACT.md` — kontrak integrasi frontend–backend.
 - `migrations/20261108000000_sendfood_backend_mvp_hardening.sql` - migrasi maju hardening (belum diterapkan ke Supabase mana pun).
+- `migrations/20261109000000_sendfood_rls_initplan_fk_indexes.sql` - migrasi maju performa: kebijakan RLS memanggil `auth.uid()`/`current_app_role()` lewat `(select ...)` agar dievaluasi sekali per query (advisor `auth_rls_initplan`), plus index untuk tiga foreign key (advisor `unindexed_foreign_keys`). Logika akses tidak berubah. Diterapkan setelah hardening; belum diterapkan ke Supabase mana pun.
 - `MVP_GAP_CHECKLIST.md` - checklist gap MVP dan keputusan wajib sebelum pilot.
 - `tests/verify_schema.sql` — pemeriksaan struktur read-only setelah migrasi.
 - `scripts/apply_migration_local.sh` - penerap migrasi KHUSUS lokal/sekali pakai (bukan alat deploy produksi).
