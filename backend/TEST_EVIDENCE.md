@@ -44,11 +44,14 @@ Cakupan HTTP: `00_stack_surface`, `10_auth_jwt`, `20_cod_flow`, `30_checkout_neg
 
 | Workflow | Status |
 |---|---|
-| `backend-tests.yml` dua job (`runtime-tests`, `http-stack-tests`), action dipin SHA | Belum dijalankan saat commit ini dibuat; status aktual lihat checks pada PR #1 |
+| `backend-tests.yml` dua job (`runtime-tests`, `http-stack-tests`), action dipin SHA | Lulus pada `e798fab`: empat check-run sukses (run [42491401976](https://github.com/aldiloop/sendfood/actions/runs/42491401976) dan [42491398283](https://github.com/aldiloop/sendfood/actions/runs/42491398283), masing-masing dua job). Commit sesudahnya: lihat checks PR #1 |
 | Versi lama (hanya job SQL) | Lulus pada `41eb679` dan `22e5133` (lihat `README.md`) |
 
 ## Belum dibuktikan
 
-- Penerapan hardening ke Supabase sungguhan (tidak ada staging; tidak diterapkan live).
-- Audit NaN live pada kolom baru.
-- Storage, frontend/PWA, keputusan bisnis.
+- Penerapan hardening ke Supabase sungguhan (staging ada, tetapi keadaan schema-nya belum diverifikasi; hardening tidak diterapkan oleh PR ini).
+- Audit NaN produksi pada kolom baru. Staging 2026-11-09: preflight dari `README.md` mengembalikan 0 untuk delapan kolom, tetapi role sesi tidak diperiksa sehingga visibilitas semua baris belum terbukti.
+- Penegakan read-only produksi di tingkat role (hanya `transaction_read_only = on` untuk satu query) dan pencabutan token lama. Rincian: `MVP_GAP_CHECKLIST.md`, bagian Gate hosted.
+- Storage (belum diimplementasi), frontend/PWA, keputusan bisnis.
+
+Tidak ada tes yang dijalankan ulang untuk commit dokumen 2026-11-09; angka 507/47/554 di atas tetap berasal dari run 2026-11-08.

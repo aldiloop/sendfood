@@ -19,8 +19,9 @@ Transfer manual, pembatalan, dan pencatatan COD ditolak sampai operator mengatur
 - `psql -f` tanpa `ON_ERROR_STOP` keluar 0 saat gagal; selalu pakai `-v ON_ERROR_STOP=1`.
 
 ## Preflight NaN (sebelum hardening di database nyata)
-Hitung baris `= 'NaN'::numeric` pada `products.price`, `stores.delivery_fee`, `stores.service_radius_km`, `orders.subtotal/delivery_fee/total`, `order_items.unit_price_snapshot/line_total`, sebagai role yang melihat semua baris (bukan klien ber-RLS). Hanya `products.price` pernah diaudit live; kolom lain belum. Query lengkap di `backend/README.md`.
+Hitung baris `= 'NaN'::numeric` pada `products.price`, `stores.delivery_fee`, `stores.service_radius_km`, `orders.subtotal/delivery_fee/total`, `order_items.unit_price_snapshot/line_total`, sebagai role yang melihat semua baris (bukan klien ber-RLS). Di produksi hanya `products.price` pernah diaudit; kolom lain belum. Di staging kedelapan kolom = 0 (2026-11-09), tetapi role sesi tidak diperiksa sehingga bukan bukti visibilitas semua baris. Query lengkap di `backend/README.md`; gate hosted di `backend/MVP_GAP_CHECKLIST.md`.
+- Sampai pencabutan token lama dikonfirmasi pemilik, tidak ada tulis apa pun ke staging.
 
 ## Risiko yang didokumentasikan
-Access token tetap valid sampai `exp` setelah logout (JWT stateless); jaga `exp` pendek. Storage belum diuji sehingga tidak ada bucket/policy.
+Access token tetap valid sampai `exp` setelah logout (JWT stateless); jaga `exp` pendek. Storage belum diimplementasi sehingga tidak ada bucket/policy; jangan membuat bucket publik atau policy permisif sebelum keputusan visibilitas/siklus hidup disetujui. `image_url`/`avatar_url` adalah teks bebas tak tepercaya.
 - Kebijakan bisnis yang belum diputuskan tidak boleh punya default diam-diam. `completion_actor` tanpa baris = `completed` ditolak untuk semua peran; tes boleh menyetelnya HANYA di DB sekali pakai lewat `provision_set_policy`, ditandai fixture sintetis.

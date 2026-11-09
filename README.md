@@ -26,7 +26,7 @@ Mulai dari [PRD](docs/specs/PRD.md), lalu baca [panduan spesifikasi](docs/specs/
 - Backend mencakup enam tabel aplikasi, RLS, dan RPC untuk pembuatan pesanan, transisi status, serta assignment driver.
 - Checkout fondasi hanya menerima **COD** dan akan ditolak sampai toko memiliki konfigurasi biaya pengiriman, radius layanan, dan koordinat.
 - Migrasi hardening `20261108000000` tersedia di branch ini tetapi belum diterapkan ke Supabase; transfer manual, pembatalan, dan pencatatan COD tertutup sampai kebijakan operator diatur; assignment driver sementara hanya admin.
-- Dua suite tes lokal tersedia (SQL, dan HTTP dengan Supabase Auth/GoTrue + PostgREST nyata di localhost); bukti di [TEST_EVIDENCE](backend/TEST_EVIDENCE.md), panduan di [panduan backend](backend/README.md). CI dua-job belum dijalankan untuk commit terbaru. Storage tidak tersedia; audit NaN live kolom baru belum dilakukan. Checklist: [MVP_GAP_CHECKLIST](backend/MVP_GAP_CHECKLIST.md).
+- Dua suite tes lokal tersedia (SQL, dan HTTP dengan Supabase Auth/GoTrue + PostgREST nyata di localhost); bukti di [TEST_EVIDENCE](backend/TEST_EVIDENCE.md), panduan di [panduan backend](backend/README.md). CI dua-job lulus pada `e798fab`; lihat checks PR #1 untuk commit terbaru. Storage belum diimplementasi (menunggu keputusan visibilitas/siklus hidup); audit NaN produksi kolom baru belum dilakukan; gate hosted masih terbuka. Checklist: [MVP_GAP_CHECKLIST](backend/MVP_GAP_CHECKLIST.md).
 - Pemeriksaan struktur tersedia, tetapi bukan pengganti tes RLS lintas peran dan tes transaksi end-to-end dengan akun staging.
 - Frontend, konfigurasi build PWA, dan deployment aplikasi belum dibuat di repository ini.
 

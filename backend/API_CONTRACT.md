@@ -4,9 +4,9 @@
 
 Kontrak ini sesuai migrasi `20261107000000_sendfood_backend_foundation.sql` (sudah diterapkan di proyek Supabase MVP) ditambah migrasi maju `20261108000000_sendfood_backend_mvp_hardening.sql`.
 
-- **Hardening BELUM diterapkan ke Supabase mana pun.** Frontend boleh dibangun *contract-first*, tetapi RPC/kolom yang hanya ada di hardening (`create_order` 8 argumen, `list_stores`, `search_products`, `list_my_orders`, `record_cod_collection`, `admin_*`, `customer_addresses`) tidak boleh diasumsikan aktif di lingkungan live.
+- **Hardening tidak diterapkan oleh PR ini ke Supabase mana pun.** Proyek staging kini ada, tetapi keadaan schema-nya (fondasi saja atau sudah hardening) belum diverifikasi. Frontend boleh dibangun *contract-first*, tetapi RPC/kolom yang hanya ada di hardening (`create_order` 8 argumen, `list_stores`, `search_products`, `list_my_orders`, `record_cod_collection`, `admin_*`, `customer_addresses`) tidak boleh diasumsikan aktif di lingkungan hosted mana pun. Gate hosted yang masih terbuka: [MVP_GAP_CHECKLIST.md](MVP_GAP_CHECKLIST.md#gate-hosted-yang-masih-diblokir).
 - Diverifikasi **lokal** terhadap Postgres 16.2 sekali pakai, lalu terhadap tumpukan HTTP nyata: Supabase Auth (GoTrue) v2.197.0 + PostgREST v16.5 (bukan Supabase cloud). Lihat `TEST_EVIDENCE.md` dan `README.md`.
-- Supabase Storage **tidak** dijalankan/diuji dan tidak ada bucket/policy. Kontrak hanya memakai `image_url` (text); unggah foto belum tersedia.
+- Supabase Storage **belum diimplementasi**: tidak ada bucket, policy, maupun tes. Kontrak hanya memakai `image_url`/`avatar_url` (text); unggah foto belum tersedia. Keputusan yang dibutuhkan sebelum Storage dibuat: [MVP_GAP_CHECKLIST.md](MVP_GAP_CHECKLIST.md#storage-unggah-foto-belum-diimplementasi).
 - Backend lokal yang lulus tes **bukan** kesiapan pilot/produksi: keputusan bisnis masih terbuka dan frontend belum ada.
 
 Gunakan Supabase Auth untuk sesi. Katalog menggunakan akses tabel yang dilindungi RLS; checkout, perubahan status, dan assignment driver hanya melalui RPC. Jangan menaruh `service_role` key di browser.
@@ -204,7 +204,9 @@ Perbaikan di hardening (maju, fondasi tidak diubah, data tidak ditulis ulang):
 - `list_stores`/`search_products`: `within_service_radius = null` bila jarak atau radius NaN.
 - Baris legacy ber-NaN pada salah satu kolom di atas membuat migrasi gagal `23514` dan di-rollback seluruhnya; baris tidak pernah diubah otomatis (lihat preflight di `README.md`).
 
-## Ringkasan kontrak untuk frontend (Muse)
+## Ringkasan kontrak untuk frontend
+
+Kepemilikan frontend mengikuti `docs/specs/TRD.md` §2. Pembaruan dokumen spesifikasi yang menetapkan frontend dikerjakan dengan Kiro ada di PR #3 (belum di-merge); kontrak ini tidak bergantung pada siapa yang mengerjakan frontend.
 
 Bagian ini merangkum deklarasi SQL apa adanya (`F` = migrasi fondasi `20261107000000_...`, `H` = migrasi hardening `20261108000000_...`). Nomor baris sengaja tidak dicantumkan karena cepat basi; cari deklarasi dengan `grep -n` pada berkas migrasi. Bila ada selisih, SQL yang benar.
 
@@ -215,6 +217,7 @@ Migrasi hardening (`H`) di PR ini **belum diterapkan ke proyek Supabase mana pun
 ### Cara memanggil dari client
 
 - Foto: tidak ada Storage; pakai `image_url` (text) saja.
+- `stores.image_url`, `products.image_url`, dan `profiles.avatar_url` adalah teks bebas: migrasi tidak membatasi skema, host, atau panjangnya, dan seller/pemilik profil dapat mengisinya dengan URL apa pun. Perlakukan sebagai input tak tepercaya: render hanya URL `https:` (tolak `javascript:`, `data:`, dan skema lain), selalu lewat atribut `src` gambar, dengan placeholder bila kosong/gagal dimuat.
 - Base URL dan anon key berasal dari env proyek Supabase (mis. `VITE_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`); jangan menulis hostname di kode. Jangan pernah memakai `service_role` di browser.
 - RPC: `supabase.rpc('<nama>', { p_arg: ... })`, jalur PostgREST relatif `POST /rest/v1/rpc/<nama>` dengan body JSON bernama-argumen. Argumen ber-default boleh dihilangkan.
 - Tabel: `supabase.from('<tabel>').select('kolom, ...')`, jalur relatif `/rest/v1/<tabel>`.
@@ -390,6 +393,8 @@ Status pesanan: `pending_seller`, `accepted`, `rejected`, `preparing`, `ready_fo
 Metode pembayaran: `cod`, `manual_transfer` (belum aktif untuk checkout). Status pembayaran tersedia sebagai enum; pencatatan COD tersedia lewat `record_cod_collection` (tertutup secara default), sedangkan verifikasi transfer manual belum memiliki workflow.
 
 Pesan error RPC yang umum: `authentication_required`, `customer_role_required`, `store_not_available`, `store_delivery_not_configured`, `outside_store_service_radius`, `product_unavailable_or_wrong_store`, `invalid_product_price` (harga produk NaN/legacy tidak valid), `order_not_cod`, `order_not_delivered`, `payment_already_recorded`, `cod_collection_policy_not_configured`, `completion_policy_not_configured`, `address_limit_reached`, `manual_transfer_not_configured`, `status_transition_not_allowed`, `cancellation_policy_not_configured`, `admin_role_required`, `driver_profile_required`, `invalid_idempotency_key`, `idempotency_key_conflict`, `items_must_be_array`, `item_count_out_of_range`, `invalid_order_item`, `duplicate_product_in_items`, `delivery_address_required`, `delivery_note_too_long`, `valid_delivery_coordinates_required`, `order_subtotal_unavailable`, `order_not_found`, `order_not_assignable`, `driver_not_assigned`, `rejection_reason_required`, `cancellation_reason_required`, `status_note_too_long`, `direct_write_forbidden`. Semua memakai `errcode P0001` dengan pesan snake_case.
+
+Daftar di atas tidak lengkap. Error katalog (`invalid_pagination`, `invalid_sort`, `search_query_too_long`, `valid_coordinates_required`, `location_required_for_sort`, `invalid_price_range`), admin (`store_not_found`, `product_not_found`, `invalid_argument`, `invalid_delivery_config`), dan guard tulis tabel (`profile_role_change_forbidden`, `store_operational_field_forbidden`, `store_location_locked`) dijelaskan di bagian masing-masing. `invalid_policy_value`, `unknown_policy_key`, `profile_not_found` hanya muncul dari `provision_*` (bukan client). `hardening_requires_supabase_auth_schema` dan `hardening_requires_foundation_migration` hanya muncul saat migrasi diterapkan.
 
 UI harus menampilkan pesan yang ramah dan tidak memaparkan SQL/detail internal. Pertahankan keranjang ketika checkout gagal.
 

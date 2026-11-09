@@ -97,11 +97,11 @@ Berkas hardening adalah SATU transaksi eksplisit: `begin; set local lock_timeout
 
 ### Staging dan produksi
 
-**Tidak ada staging.** Hardening belum diterapkan di mana pun. Aturan:
+Proyek staging terpisah kini ada, tetapi keadaan schema/ledger-nya belum diverifikasi. PR ini tidak menerapkan hardening ke staging maupun produksi. Gate hosted yang masih terbuka (pencabutan token lama, bukti visibilitas semua baris untuk preflight NaN, penegakan read-only produksi) ada di [MVP_GAP_CHECKLIST.md](MVP_GAP_CHECKLIST.md#gate-hosted-yang-masih-diblokir). Sampai pencabutan token lama dikonfirmasi, tidak ada tulis ke staging. Aturan:
 
 - **JANGAN PERNAH memutar ulang (replay) atau mengedit migrasi fondasi di remote.** Fondasi sudah diterapkan pada proyek Supabase live.
 - **Ketidakcocokan ledger yang diketahui:** ledger migrasi live mencatat fondasi sebagai versi `20261107042649`, bukan `20261107000000` (nama berkas). Jangan "memperbaiki" dengan `supabase db push` tanpa menyelaraskan ledger dan nama berkas lebih dulu; `db push` buta bisa mencoba menerapkan ulang fondasi.
-- Tidak ada penulisan/migrasi live tanpa persetujuan eksplisit pemilik. PR ini **tidak mengeksekusi** apa pun terhadap Supabase.
+- Tidak ada penulisan/migrasi live tanpa persetujuan eksplisit pemilik. Kode dan skrip PR ini **tidak mengeksekusi** apa pun terhadap Supabase. Kontak hosted yang pernah dilakukan hanya dua query baca lewat MCP pada 2026-11-09 (dicatat di bagian Gate hosted checklist).
 
 Panduan bagi operator tepercaya di kemudian hari (**tidak dijalankan oleh PR ini**):
 
