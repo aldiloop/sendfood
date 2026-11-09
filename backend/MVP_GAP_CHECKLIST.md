@@ -78,7 +78,7 @@ Dasar dari sumber:
 - Visibilitas data yang sudah berlaku (RLS fondasi): profil hanya terbaca oleh pemiliknya dan admin (`profiles_select_self_or_admin`); produk hanya publik bila `is_available` dan tokonya aktif; toko nonaktif hanya terlihat oleh pemilik dan admin. Bucket publik akan membuat foto produk tersembunyi, toko nonaktif, dan avatar tetap dapat diambil lewat URL, jadi bertentangan dengan RLS ini kecuali pemilik menerimanya secara eksplisit.
 - Siklus hidup: menghapus produk membuat `order_items.product_id` menjadi `null` (`on delete set null`); item pesanan tidak menyimpan snapshot foto. Tidak ada aturan apakah objek foto ikut dihapus, disimpan, atau diganti.
 - Lingkungan: Supabase Storage v1.90.0 butuh Node >= 26. Sandbox per 2026-11-09 hanya punya Node 18.20.8, 20.20.2, 22.23.4, 24.22.1, jadi policy Storage tidak bisa diuji lokal terhadap layanan Storage nyata.
-- Tidak ada draf Storage di branch ini, di worktree, atau di stash per 2026-11-09.
+- Draf Storage tidak tersedia dan tidak terverifikasi di worktree, branch, dan stash saat ini per 2026-11-09. Laporan historis sesi lain tentang draf yang belum di-commit belum diverifikasi dan bukan sumber.
 
 Keputusan yang dibutuhkan dari pemilik produk:
 
