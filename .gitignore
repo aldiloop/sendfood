@@ -11,3 +11,10 @@ build/
 coverage/
 .supabase/
 .DS_Store
+
+# Biner Postgres lokal untuk tes (lihat backend/README.md)
+.pgtools/
+
+# Python bytecode
+__pycache__/
+*.pyc

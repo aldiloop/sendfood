@@ -1,0 +1,67 @@
+name: backend-tests
+
+on:
+  push:
+    branches: [backend, backend-mvp-hardening]
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+
+permissions:
+  contents: read
+
+# Hanya tes. Tidak ada deploy/migrasi ke Supabase dan tidak ada secret yang dipakai.
+jobs:
+  runtime-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Kredensial sekali pakai untuk service container CI, bukan rahasia proyek.
+          POSTGRES_PASSWORD: ci-only-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SENDFOOD_TEST_PGHOST: 127.0.0.1
+      SENDFOOD_TEST_PGPORT: '5432'
+      SENDFOOD_TEST_PGUSER: postgres
+      PGPASSWORD: ci-only-throwaway
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pasang klien PostgreSQL
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          echo "PG_BIN=$(dirname "$(ls /usr/lib/postgresql/*/bin/psql | tail -n1)")" >> "$GITHUB_ENV"
+      - name: Jalankan tes backend (structural, runtime, concurrency, migrasi legacy)
+        run: bash backend/tests/run.sh
+
+  http-stack-tests:
+    # Supabase Auth (GoTrue) + PostgREST asli dari GitHub Releases (SHA256 diverifikasi), Postgres lokal.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # pgserver 0.1.4 hanya menyediakan wheel cp39-cp312.
+          python-version: '3.11'
+      - name: Pasang PostgreSQL 16.2 (pgserver, sama dengan run lokal)
+        # Runner ubuntu-latest (26.04) tidak menyediakan paket postgresql-16.
+        run: |
+          python -m venv .pgtools/venv
+          .pgtools/venv/bin/pip install --quiet pgserver==0.1.4
+          echo "PG_BIN=$(ls -d "$PWD"/.pgtools/venv/lib/python3*/site-packages/pgserver/pginstall/bin)" >> "$GITHUB_ENV"
+      - name: Ambil biner resmi PostgREST dan Supabase Auth
+        run: bash backend/tests/stack/fetch_bins.sh
+      - name: Jalankan stack HTTP
+        run: bash backend/tests/stack/run_stack.sh

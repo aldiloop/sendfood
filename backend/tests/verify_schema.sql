@@ -38,6 +38,46 @@ from (
              where t.relnamespace = 'public'::regnamespace
                and ix.relname in ('order_items_order_id_idx','order_status_history_order_created_idx')
              limit 2) as expected_indexes)
+    ),
+    (
+      'product price excludes numeric NaN',
+      (select exists (
+       select 1
+       from pg_catalog.pg_constraint c
+       where c.conrelid = 'public.products'::regclass
+         and c.conname = 'products_price_not_nan'
+         and c.contype = 'c'
+         and c.convalidated
+       limit 1))
+    ),
+    (
+      'store fee/radius and order amounts exclude numeric NaN',
+      (select count(*) = 4
+       from (select c.conname from pg_catalog.pg_constraint c
+             where c.contype = 'c' and c.convalidated
+               and c.conname in ('stores_delivery_fee_not_nan','stores_service_radius_not_nan',
+                                 'orders_amounts_not_nan','order_items_amounts_not_nan')
+             limit 4) as nan_constraints)
+    ),
+    (
+      'store service radius capped at 5 km (migrasi 20261112000001)',
+      (select exists (
+       select 1
+       from pg_catalog.pg_constraint c
+       where c.conrelid = 'public.stores'::regclass
+         and c.conname = 'stores_service_radius_max_5km'
+         and c.contype = 'c'
+         and c.convalidated
+       limit 1))
+    ),
+    (
+      'delivery_fee_for_distance exists and is internal-only (migrasi 20261112000001)',
+      (select exists (
+       select 1 from pg_catalog.pg_proc p
+       where p.pronamespace = 'public'::regnamespace
+         and p.proname = 'delivery_fee_for_distance')
+       and not has_function_privilege('anon', 'public.delivery_fee_for_distance(integer)', 'execute')
+       and not has_function_privilege('authenticated', 'public.delivery_fee_for_distance(integer)', 'execute'))
     )
 ) as checks(check_name, passed)
 order by check_name
