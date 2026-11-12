@@ -106,7 +106,7 @@ test('role tidak bisa dinaikkan lewat PostgREST (PATCH profiles.role / provision
   const pol = await rpc('provision_set_policy', { p_key: 'cancellation_enabled', p_value: 'true' }, cust.token);
   expectError(pol, { status: [401, 403, 404] }, 'policy by user');
   assert.equal(sql(`select role from public.profiles where id='${cust.id}'`), 'customer');
-  assert.equal(sql(`select value from public.ops_policy where key='cancellation_enabled'`), 'false');
+  assert.equal(sql(`select value from public.ops_policy where key='cancellation_enabled'`), 'true');
 });
 
 test('profil: pengguna boleh ubah full_name sendiri, tidak boleh profil orang lain', async () => {

@@ -14,7 +14,7 @@ Gunakan Supabase Auth untuk sesi. Katalog menggunakan akses tabel yang dilindung
 ## Entitas utama
 
 - `profiles`: dibuat otomatis saat akun Supabase Auth dibuat. Role awal selalu `customer`; metadata dari client tidak dapat menaikkan role.
-- `stores`: profil penjual, katalog publik hanya menampilkan toko aktif. `delivery_fee`, `service_radius_km`, koordinat toko, dan status aktif diatur oleh operator tepercaya.
+- `stores`: profil penjual, katalog publik hanya menampilkan toko aktif. `service_radius_km`, koordinat toko, dan status aktif diatur oleh operator tepercaya. Kolom `delivery_fee` dipertahankan (tampil di katalog) tetapi **tidak lagi dipakai untuk harga checkout** — ongkir dihitung dari rumus jarak (lihat `create_order`).
 - `products`: katalog per toko. Produk yang tidak tersedia tidak tampil ke publik dan tidak dapat dipesan.
 - `orders`, `order_items`, `order_status_history`: data pesanan dan snapshot harga/nama untuk riwayat.
 
@@ -55,7 +55,9 @@ Tidak ada akses tulis langsung dari client ke tabel orders, items, atau status h
 
 Respons berupa satu baris berisi `order_id`, `order_code`, `subtotal`, `delivery_fee`, `total`, `payment_method`, `payment_status`, dan `order_status`. Harga produk, subtotal, biaya, total, serta snapshot item diambil/dihitung di backend, bukan dipercaya dari payload.
 
-Syarat: sesi customer aktif; 1–50 item produk unik dari toko yang sama; kuantitas 1–99; produk/toko aktif; alamat dan koordinat pengantaran valid. Checkout akan ditolak sampai operator mengisi biaya pengiriman tetap per toko, radius layanan, dan koordinat toko. Jarak saat ini dihitung garis lurus dengan Haversine. Ini konfigurasi/asumsi sementara yang harus disetujui sebelum pilot.
+Syarat: sesi customer aktif; 1–50 item produk unik dari toko yang sama; kuantitas 1–99; produk/toko aktif; alamat dan koordinat pengantaran valid. Checkout akan ditolak sampai operator mengisi radius layanan dan koordinat toko; `stores.delivery_fee` **tidak lagi diwajibkan/dibaca** saat checkout (boleh null).
+
+**Ongkir (keputusan pemilik 12 Nov 2026, migrasi 20261112000001):** dihitung dari jarak garis lurus Haversine toko → alamat antar, dibulatkan ke meter bilangan bulat, lalu rumus: jarak ≤ 1.000 m → Rp2.000 flat; jarak > 1.000 m → Rp2.000 + `ceil((jarak_m − 1.000) / 100) × Rp200` (contoh: 2.350 m → Rp4.800). Ongkir dikunci di `orders.delivery_fee` saat checkout. **Radius layanan maksimal 5 km** (constraint `stores_service_radius_max_5km`); alamat di luar radius toko ditolak `outside_store_service_radius`.
 
 Hanya COD yang aktif. `manual_transfer` ditolak dengan `manual_transfer_not_configured` sampai pihak verifikasi dan alur bukti transfer diputuskan.
 
@@ -72,7 +74,12 @@ Transisi:
 - `delivered` → `completed`: **tertutup secara default**. Migrasi tidak membuat baris `completion_actor`; selama baris itu tidak ada atau nilainya bukan `customer`/`seller`/`driver`, `completed` ditolak `completion_policy_not_configured` untuk SEMUA peran (termasuk admin) sampai operator menyetel `completion_actor` secara eksplisit lewat `provision_set_policy('completion_actor', 'customer'|'seller'|'driver')` (hanya `service_role`/`postgres`). Order dan history tidak berubah saat ditolak. Setelah dikonfigurasi: hanya aktor itu (customer pemilik / seller pemilik toko / driver yang ditugaskan) dan admin (override kontrak) yang boleh. Aktor mana yang dipakai adalah keputusan bisnis yang belum ditetapkan.
 - Admin dapat melakukan transisi yang sama, tetapi tidak dapat melompati tahapan.
 
-`cancelled` ditolak dengan `cancellation_policy_not_configured` selama `ops_policy.cancellation_enabled` bukan `true` atau `cancellation_allowed_statuses` kosong (default: tertutup). Jika operator mengaktifkannya: hanya dari status yang terdaftar (selain itu `status_transition_not_allowed`), alasan wajib (`cancellation_reason_required`), dan aktor yang boleh adalah admin, customer pemilik, atau seller toko. Pembatalan **tidak** mengubah `payment_status`; refund belum ada. Setiap transisi sah dicatat di `order_status_history`.
+`cancelled` (keputusan pemilik 12 Nov 2026, migrasi 20261112000000 — pembatalan per aktor). Master switch `ops_policy.cancellation_enabled` harus `true`, alasan (`p_note`) wajib untuk semua aktor (`cancellation_reason_required`), dan pembatalan **tidak** mengubah `payment_status`; refund belum ada. Aturan per aktor:
+- **Customer** (pemilik order): hanya dari `pending_seller` (kunci `cancellation_allowed_statuses`, seed: `pending_seller`).
+- **Seller** (pemilik toko): dari `pending_seller`, `accepted`, `preparing` (kunci `cancellation_allowed_statuses_seller`, seed: `pending_seller,accepted,preparing`); tidak boleh setelah `preparing`.
+- **Admin**: dari status **mana pun** (melewati cek daftar status).
+- Aktor lain (driver, customer/seller lain) ditolak `status_transition_not_allowed`; status saat ini di luar daftar aktor ditolak `status_transition_not_allowed`; kebijakan belum dikonfigurasi (switch mati atau daftar aktor kosong) ditolak `cancellation_policy_not_configured`.
+Setiap transisi sah dicatat di `order_status_history`.
 
 ### Assignment driver
 
@@ -111,7 +118,7 @@ Perubahan admin dicatat di `admin_audit_log` (admin dapat membaca). Seller tidak
 
 ### Provisioning tepercaya (BUKAN untuk client)
 
-`provision_set_user_role(p_user_id, p_role, p_reason)` dan `provision_set_policy(p_key, p_value)` hanya dapat dieksekusi `service_role`/`postgres`; anon/authenticated ditolak oleh hak akses. Jangan dipanggil dari browser. Kunci kebijakan valid: `completion_actor` (`customer|seller|driver`), `cancellation_enabled`, `manual_transfer_enabled`, `cod_collection_recording_enabled` (`true|false`), `cancellation_allowed_statuses` (daftar dipisah koma dari `pending_seller,accepted,preparing,ready_for_pickup`), `cod_collection_actor` (`driver|admin`). Kesalahan: `invalid_policy_value`, `unknown_policy_key`, `profile_not_found`. Catatan: `manual_transfer_enabled=true` pun belum membuka transfer, karena workflow verifikasi/bukti belum ada; `create_order` tetap menolak `manual_transfer`.
+`provision_set_user_role(p_user_id, p_role, p_reason)` dan `provision_set_policy(p_key, p_value)` hanya dapat dieksekusi `service_role`/`postgres`; anon/authenticated ditolak oleh hak akses. Jangan dipanggil dari browser. Kunci kebijakan valid: `completion_actor` (`customer|seller|driver`), `cancellation_enabled`, `manual_transfer_enabled`, `cod_collection_recording_enabled` (`true|false`), `cancellation_allowed_statuses` (daftar dipisah koma dari `pending_seller,accepted,preparing,ready_for_pickup` — berlaku untuk **customer**), `cancellation_allowed_statuses_seller` (daftar yang sama — berlaku untuk **seller**), `cod_collection_actor` (`driver|admin`). Kesalahan: `invalid_policy_value`, `unknown_policy_key`, `profile_not_found`. Catatan: `manual_transfer_enabled=true` pun belum membuka transfer, karena workflow verifikasi/bukti belum ada; `create_order` tetap menolak `manual_transfer`.
 
 ## Autentikasi dan contoh pemanggilan (tanpa rahasia)
 
@@ -200,7 +207,7 @@ Di fondasi, `stores.delivery_fee` `numeric(12,2)` dan `stores.service_radius_km`
 Perbaikan di hardening (maju, fondasi tidak diubah, data tidak ditulis ulang):
 
 - Constraint baru: `products_price_not_nan`, `stores_delivery_fee_not_nan`, `stores_service_radius_not_nan`, `orders_amounts_not_nan` (subtotal, delivery_fee, total), `order_items_amounts_not_nan` (unit_price_snapshot, line_total). Pelanggaran menghasilkan HTTP 400 `23514`.
-- `create_order`: ongkir NaN/negatif, radius NaN/<= 0, atau koordinat toko NaN dianggap `store_delivery_not_configured`; jarak NaN menjadi `outside_store_service_radius`; subtotal/total NaN menjadi `order_subtotal_unavailable`; harga produk NaN `invalid_product_price`.
+- `create_order`: radius NaN/<= 0 atau koordinat toko NaN dianggap `store_delivery_not_configured`; jarak NaN menjadi `outside_store_service_radius`; subtotal/total NaN menjadi `order_subtotal_unavailable`; harga produk NaN `invalid_product_price`. Sejak migrasi 20261112000001, `stores.delivery_fee` tidak lagi dibaca saat checkout, jadi nilai NaN di kolom itu tidak lagi memengaruhi order (ongkir memakai rumus jarak).
 - `list_stores`/`search_products`: `within_service_radius = null` bila jarak atau radius NaN.
 - Baris legacy ber-NaN pada salah satu kolom di atas membuat migrasi gagal `23514` dan di-rollback seluruhnya; baris tidak pernah diubah otomatis (lihat preflight di `README.md`).
 
@@ -373,7 +380,7 @@ Fungsi/trigger berikut adalah detail implementasi. Jangan dipanggil atau dibangu
 ### Aturan perilaku yang wajib dipatuhi UI
 
 - `manual_transfer` **selalu ditolak** `manual_transfer_not_configured`, bahkan bila `ops_policy.manual_transfer_enabled=true`. Jangan tampilkan sebagai pilihan.
-- Penyelesaian pesanan (`completion_policy_not_configured`), pembatalan (`cancellation_policy_not_configured`) dan pencatatan COD (`cod_collection_policy_not_configured`) **fail closed** (tertutup) sampai operator mengatur `ops_policy`. UI harus menangani kedua error tersebut.
+- Penyelesaian pesanan (`completion_policy_not_configured`) dan pencatatan COD (`cod_collection_policy_not_configured`) **fail closed** (tertutup) sampai operator mengatur `ops_policy`; pembatalan kini terbuka dengan aturan per aktor (lihat bagian `cancelled`) dan hanya ditolak `cancellation_policy_not_configured` bila switch dimatikan atau daftar aktor kosong. UI harus menangani error-error tersebut.
 - `delivered`/`completed` **tidak sama dengan lunas**. Hanya `record_cod_collection` yang mengubah `payment_status` menjadi `verified`; tampilkan `payment_status` apa adanya.
 - Frontend **selalu mengirim `p_idempotency_key`** pada `create_order` (kunci baru per percobaan checkout, dipakai ulang hanya saat retry).
 - Catatan: `status_unchanged` hanya ada di `change_order_status` versi foundation yang sudah digantikan; versi hardening tidak memunculkannya, jadi tidak perlu ditangani.
@@ -383,8 +390,9 @@ Fungsi/trigger berikut adalah detail implementasi. Jangan dipanggil atau dibangu
 1. `create_order` memiliki argumen ke-8 `p_idempotency_key`; kirim selalu. Fungsi 7 argumen lama diganti (drop) oleh migrasi.
 2. Tabel `orders`, `order_items`, `order_status_history` kini ditolak untuk tulis langsung dari client (`direct_write_forbidden`); profil tidak bisa mengubah role (`profile_role_change_forbidden`).
 3. Gunakan `list_stores`/`search_products`/`list_my_orders` untuk katalog dan riwayat dengan pagination; `completed` tidak berarti lunas, tampilkan `payment_status` apa adanya.
-4. Cancel, transfer manual, dan pencatatan COD tetap tertutup sampai operator mengatur kebijakan; UI harus menangani `cancellation_policy_not_configured`, `manual_transfer_not_configured`, `cod_collection_policy_not_configured`, `completion_policy_not_configured`.
+4. Pembatalan kini terbuka dengan aturan per aktor (customer hanya dari `pending_seller`, seller sampai `preparing`, admin dari status mana pun; alasan wajib); transfer manual dan pencatatan COD tetap tertutup sampai operator mengatur kebijakan; UI harus menangani `cancellation_policy_not_configured`, `manual_transfer_not_configured`, `cod_collection_policy_not_configured`, `completion_policy_not_configured`.
 5. Rating tidak ada (P2, ditunda).
+6. Ongkir checkout mengikuti rumus jarak (≤1.000 m → Rp2.000, selebihnya +Rp200/100 m) dan **bukan** `stores.delivery_fee`; radius layanan maksimal 5 km. Kolom `delivery_fee` di katalog tetap ditampilkan apa adanya.
 
 ## Status dan error yang perlu ditangani UI
 
@@ -400,10 +408,10 @@ UI harus menampilkan pesan yang ramah dan tidak memaparkan SQL/detail internal. 
 
 ## Keputusan yang harus ditutup sebelum pilot
 
-1. Wilayah pilot, biaya kirim (apakah tarif tetap per toko atau rumus lain), radius, dan metode geolokasi/jarak.
+1. ~~Wilayah pilot, biaya kirim (apakah tarif tetap per toko atau rumus lain), radius, dan metode geolokasi/jarak.~~ **SELESAI 12 Nov 2026:** ongkir rumus jarak (≤1.000 m → Rp2.000 flat; di atasnya +Rp200/100 m kelebihan, contoh 2.350 m → Rp4.800), radius maks 5 km, jarak Haversine garis lurus (migrasi 20261112000001).
 2. Apakah admin-only assignment diterima atau driver/penjual boleh memilih tugas.
 3. Siapa memverifikasi transfer manual, bukti apa yang diperlukan, dan informasi rekening/instruksi.
-4. Kebijakan pembatalan, termasuk tahap yang masih dapat dibatalkan.
+4. ~~Kebijakan pembatalan, termasuk tahap yang masih dapat dibatalkan.~~ **SELESAI 12 Nov 2026:** customer hanya dari `pending_seller`, seller dari `pending_seller,accepted,preparing`, admin dari status mana pun, alasan wajib (migrasi 20261112000000).
 5. Apakah customer-confirmed `completed` sesuai dengan proses serah-terima.
 6. Pencatatan penagihan COD setelah driver menyerahkan pesanan.
 

@@ -72,7 +72,7 @@ wait
 t1=$(date +%s.%N)
 waited=$(awk -v a="$t0" -v b="$t1" 'BEGIN{print (b-a >= 1.0) ? "menunggu" : "tidak-menunggu"}')
 check "konkurensi: admin menonaktifkan produk menunggu checkout yang memegang lock produk" "$waited" menunggu
-check "konkurensi: checkout yang berjalan lebih dulu berhasil (1 order, total 4000+5000)" "$(q "select count(*) || ',' || coalesce(max(total),0) from public.orders where idempotency_key='conc-hold-2'")" "1,9000.00"
+check "konkurensi: checkout yang berjalan lebih dulu berhasil (1 order, total 4000+3200)" "$(q "select count(*) || ',' || coalesce(max(total),0) from public.orders where idempotency_key='conc-hold-2'")" "1,7200.00"
 check "konkurensi: setelah commit produk berstatus tidak tersedia" "$(q "select is_available from public.products where id='$TEH'")" f
 cat "$TMP/s2_b.out" | grep -qi error && fail "konkurensi: admin_set_product_available tidak error" "$(cat "$TMP/s2_b.out")" || pass "konkurensi: admin_set_product_available selesai tanpa error"
 checkout_sql $CUST_B $TEH 1 conc-after-unavail 0 > "$TMP/s2_c.sql"
@@ -114,12 +114,12 @@ SQL
 sleep 0.6
 ( "${P[@]}" -f "$TMP/s4_b.sql" > "$TMP/s4_b.out" 2>&1 ) &
 wait
-check "konkurensi: snapshot harga order = harga sebelum perubahan konkuren (10000 + ongkir 5000)" "$(q "select total from public.orders where idempotency_key='conc-price-race'")" 15000.00
+check "konkurensi: snapshot harga order = harga sebelum perubahan konkuren (10000 + ongkir 3200)" "$(q "select total from public.orders where idempotency_key='conc-price-race'")" 13200.00
 check "konkurensi: harga produk berubah setelah checkout commit (20000)" "$(q "select price from public.products where id='$NASI'")" 20000.00
 check "konkurensi: snapshot item tetap 10000 setelah harga berubah" "$(q "select unit_price_snapshot from public.order_items i join public.orders o on o.id=i.order_id where o.idempotency_key='conc-price-race'")" 10000.00
 checkout_sql $CUST_B $NASI 1 conc-price-after 0 > "$TMP/s4_c.sql"
 "${P[@]}" -f "$TMP/s4_c.sql" > "$TMP/s4_c.out" 2>&1
-check "konkurensi: checkout berikutnya memakai harga baru (20000 + 5000)" "$(q "select total from public.orders where idempotency_key='conc-price-after'")" 25000.00
+check "konkurensi: checkout berikutnya memakai harga baru (20000 + 3200)" "$(q "select total from public.orders where idempotency_key='conc-price-after'")" 23200.00
 cleanup
 
 # --- S5: dua checkout kunci berbeda, customer sama, bersamaan (diserialkan) ---

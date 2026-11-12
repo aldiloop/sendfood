@@ -15,8 +15,8 @@ begin
     'Jl. Tujuan 1', -6.21, 106.81, 'tanpa sambal', 'cod', 'e2e-cod-0001');
   perform t.logout();
   perform t.ok('e2e: subtotal 2x10000 + 3x4000 = 32000 (field harga payload diabaikan)', r.subtotal = 32000);
-  perform t.ok('e2e: ongkir dari toko = 5000', r.delivery_fee = 5000);
-  perform t.ok('e2e: total = subtotal + ongkir = 37000', r.total = 37000);
+  perform t.ok('e2e: ongkir rumus jarak ~1568 m = 3200 (bukan lagi fee toko 5000)', r.delivery_fee = 3200);
+  perform t.ok('e2e: total = subtotal + ongkir = 35200', r.total = 35200);
   perform t.ok('e2e: COD, payment_status unpaid, status pending_seller',
     r.payment_method = 'cod' and r.payment_status = 'unpaid' and r.order_status = 'pending_seller');
   select count(*) into v_n from public.order_items oi where oi.order_id = r.order_id;
@@ -113,7 +113,7 @@ begin
     exists (select 1 from public.order_items where order_id = v_o and product_name_snapshot = 'Nasi Goreng A'
             and unit_price_snapshot = 10000 and line_total = 20000));
   perform t.ok('e2e: harga produk berubah tidak mengubah subtotal/total order',
-    (select subtotal from public.orders where id = v_o) = 32000 and (select total from public.orders where id = v_o) = 37000);
+    (select subtotal from public.orders where id = v_o) = 32000 and (select total from public.orders where id = v_o) = 35200);
   update public.products set price = 10000, name = 'Nasi Goreng A' where id = '60000000-0000-0000-0000-0000000000a1';
 end $$;
 

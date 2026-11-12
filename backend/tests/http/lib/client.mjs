@@ -111,7 +111,10 @@ export async function makeUser(label, role = 'customer', metadata = {}) {
 }
 
 // Koordinat/tarif SINTETIS untuk DB lokal saja; bukan keputusan bisnis wilayah/ongkir.
-export const FIX = { lat: -6.2, lon: 106.8, fee: 8000, radius: 5, nearLat: -6.21, nearLon: 106.81, farLat: -6.5, farLon: 107.2 };
+export const FIX = { lat: -6.2, lon: 106.8, fee: 8000, radius: 5, nearLat: -6.21, nearLon: 106.81, farLat: -6.5, farLon: 107.2,
+  // Ongkir order di koordinat near (~1568 m dari toko): rumus jarak migrasi 20261112000001.
+  // FIX.fee adalah kolom stores.delivery_fee (katalog); ongkir checkout TIDAK lagi memakai kolom itu.
+  orderFee: 3200 };
 
 export async function makeStore(seller, admin, name, { configure = true, activate = true } = {}) {
   const ins = await rest('POST', '/stores', {

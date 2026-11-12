@@ -37,17 +37,24 @@ begin
   perform t.expect_err('order tak ada: ditolak', 'select public.change_order_status(gen_random_uuid(), ''accepted'', null)', 'order_not_found');
   perform t.expect_err('catatan status > 500 karakter ditolak', format(v, 'accepted', repeat('x', 501)), 'status_note_too_long');
 
-  -- Cancellation fail closed
-  perform t.expect_err('cancel: seller ditolak, kebijakan belum dikonfigurasi', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
+  -- Cancellation fail closed (matikan dulu: seed migrasi pembatalan per aktor mengaktifkan kebijakan)
+  perform t.logout();
+  perform public.provision_set_policy('cancellation_enabled', 'false');
+  perform t.login(sA);
+  perform t.expect_err('cancel: seller ditolak, kebijakan dimatikan', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
   perform t.login(cA);
-  perform t.expect_err('cancel: customer ditolak, kebijakan belum dikonfigurasi', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
+  perform t.expect_err('cancel: customer ditolak, kebijakan dimatikan', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
   perform t.login(adm);
-  perform t.expect_err('cancel: admin pun ditolak, kebijakan belum dikonfigurasi', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
+  perform t.expect_err('cancel: admin pun ditolak, kebijakan dimatikan', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
   perform t.logout();
   perform public.provision_set_policy('cancellation_enabled', 'true');
+  perform public.provision_set_policy('cancellation_allowed_statuses', '');
+  perform public.provision_set_policy('cancellation_allowed_statuses_seller', '');
   perform t.login(cA);
   perform t.expect_err('cancel: enabled=true tanpa cancellation_allowed_statuses tetap ditolak', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
   perform t.logout();
+  perform public.provision_set_policy('cancellation_allowed_statuses', 'pending_seller');
+  perform public.provision_set_policy('cancellation_allowed_statuses_seller', 'pending_seller,accepted,preparing');
 
   -- Seller menerima
   perform t.status_as(sA, o, 'accepted');
@@ -123,7 +130,7 @@ begin
   perform t.login(cB);
   perform t.expect_err('completion: customer B tidak diizinkan', format(v, 'completed', null), 'status_transition_not_allowed');
   perform t.login(cA);
-  perform t.expect_err('cancel: setelah delivered ditolak', format(v, 'cancelled', 'alasan'), 'cancellation_policy_not_configured');
+  perform t.expect_err('cancel: customer setelah delivered ditolak (delivered tidak ada di daftar customer)', format(v, 'cancelled', 'alasan'), 'status_transition_not_allowed');
   perform t.status_as(cA, o, 'completed');
   perform t.login(adm);
   perform t.expect_err('terminal: completed -> delivered (mundur) ditolak', format(v, 'delivered', null), 'status_transition_not_allowed');

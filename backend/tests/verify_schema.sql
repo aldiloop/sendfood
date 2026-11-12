@@ -58,6 +58,26 @@ from (
                and c.conname in ('stores_delivery_fee_not_nan','stores_service_radius_not_nan',
                                  'orders_amounts_not_nan','order_items_amounts_not_nan')
              limit 4) as nan_constraints)
+    ),
+    (
+      'store service radius capped at 5 km (migrasi 20261112000001)',
+      (select exists (
+       select 1
+       from pg_catalog.pg_constraint c
+       where c.conrelid = 'public.stores'::regclass
+         and c.conname = 'stores_service_radius_max_5km'
+         and c.contype = 'c'
+         and c.convalidated
+       limit 1))
+    ),
+    (
+      'delivery_fee_for_distance exists and is internal-only (migrasi 20261112000001)',
+      (select exists (
+       select 1 from pg_catalog.pg_proc p
+       where p.pronamespace = 'public'::regnamespace
+         and p.proname = 'delivery_fee_for_distance')
+       and not has_function_privilege('anon', 'public.delivery_fee_for_distance(integer)', 'execute')
+       and not has_function_privilege('authenticated', 'public.delivery_fee_for_distance(integer)', 'execute'))
     )
 ) as checks(check_name, passed)
 order by check_name

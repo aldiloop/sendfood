@@ -101,16 +101,18 @@ BEGIN
 END $$;
 ROLLBACK;
 
--- E. Admin setelah kebijakan dikonfigurasi: boleh (kontrak: admin dapat melakukan transisi sah), tercatat sebagai aktor.
+-- E. Admin setelah kebijakan dikonfigurasi: boleh (kontrak: admin dapat melakukan transisi sah),
+-- tercatat sebagai aktor, TAPI wajib beralasan (migrasi 20261112000002).
 BEGIN;
 SELECT public.provision_set_policy('completion_actor', 'customer');
 DO $$
 DECLARE o uuid := t.delivered_order('completion-admin-01');
 BEGIN
-  PERFORM t.status_as('40000000-0000-0000-0000-000000000001', o, 'completed');
-  PERFORM t.ok('completion dikonfigurasi: admin boleh menyelesaikan (override kontrak), tercatat',
+  PERFORM t.status_as('40000000-0000-0000-0000-000000000001', o, 'completed', 'override: pelanggan sudah terima, kurir tidak bisa menandai');
+  PERFORM t.ok('completion dikonfigurasi: admin boleh menyelesaikan (override kontrak), tercatat + beralasan',
     EXISTS (SELECT 1 FROM public.order_status_history WHERE order_id = o AND new_status = 'completed'
-            AND changed_by = '40000000-0000-0000-0000-000000000001'));
+            AND changed_by = '40000000-0000-0000-0000-000000000001'
+            AND note = 'override: pelanggan sudah terima, kurir tidak bisa menandai'));
 END $$;
 ROLLBACK;
 

@@ -78,10 +78,13 @@ test('tulis langsung ke orders/order_items/order_status_history ditolak untuk se
     }
   }
   assert.equal(totals(), before);
-  assert.equal(sql(`select payment_status||'/'||order_status||'/'||total from public.orders where id='${oid}'`), `unpaid/pending_seller/${(10000 + FIX.fee).toFixed(2)}`);
+  assert.equal(sql(`select payment_status||'/'||order_status||'/'||total from public.orders where id='${oid}'`), `unpaid/pending_seller/${(10000 + FIX.orderFee).toFixed(2)}`);
 });
 
 test('kebijakan fail-closed: pembatalan dan pencatatan COD ditolak; delivered tidak menjadi lunas', async () => {
+  // Seed migrasi pembatalan per aktor mengaktifkan cancellation_enabled; matikan dulu
+  // agar cek fail-closed tetap berlaku, pulihkan di akhir tes.
+  sql(`select public.provision_set_policy('cancellation_enabled', 'false')`);
   const r = await rpc('create_order', orderArgs(w.storeA, [{ product_id: w.pA2.id, quantity: 1 }]), w.customerA.token);
   const oid = r.body[0].order_id;
   for (const who of [w.customerA, w.sellerA, w.admin]) {
@@ -98,6 +101,7 @@ test('kebijakan fail-closed: pembatalan dan pencatatan COD ditolak; delivered ti
   assert.equal(map.cod_collection_recording_enabled, 'false');
   expectError(await rpc('admin_get_policies', {}, w.customerA.token), { status: 400, message: 'admin_role_required' }, 'policies customer');
   assert.equal(sql(`select payment_status from public.orders where id='${oid}'`), 'unpaid');
+  sql(`select public.provision_set_policy('cancellation_enabled', 'true')`);
 });
 
 test('konkurensi: 12 request paralel dengan idempotency key sama -> tepat 1 order', async () => {

@@ -16,6 +16,9 @@ values ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000
 do $$
 declare v_id uuid; v_id2 uuid; v_msg text; v_cnt int;
 begin
+  -- Cancel kini sukses karena seed kebijakan pembatalan per aktor (migrasi 20261112000000
+  -- mengaktifkan cancellation_enabled). Matikan dulu agar cek fail-closed tetap berlaku.
+  perform public.provision_set_policy('cancellation_enabled', 'false');
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
   set local role authenticated;
 
@@ -65,6 +68,7 @@ begin
   end;
 
   reset role;
+  perform public.provision_set_policy('cancellation_enabled', 'true');
   raise notice 'PASS: hardening smoke';
 end
 $$;

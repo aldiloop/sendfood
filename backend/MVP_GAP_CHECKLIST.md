@@ -2,7 +2,7 @@
 
 Status per 2026-11-09, branch `backend-mvp-hardening`. Dasar: prioritas P0/P1/P2 di [PRD](../docs/specs/PRD.md). Bukti tes: [TEST_EVIDENCE.md](TEST_EVIDENCE.md).
 
-**Kesimpulan jujur: MVP/PWA BELUM siap pilot atau produksi, dan backend belum final.** Frontend/PWA belum ada, migrasi hardening tidak diterapkan oleh PR ini ke Supabase mana pun, audit NaN produksi untuk kolom baru belum dilakukan, gate hosted masih diblokir (lihat [Gate hosted](#gate-hosted-yang-masih-diblokir)), Supabase Storage belum diimplementasi (lihat [Storage](#storage-unggah-foto-belum-diimplementasi)), dan enam keputusan bisnis belum diputuskan. Backend lulus tes **secara lokal** (Postgres lokal dan tumpukan Supabase Auth/GoTrue + PostgREST nyata); itu bukan Supabase cloud, bukan staging, dan bukan kesiapan pilot.
+**Kesimpulan jujur: MVP/PWA BELUM siap pilot atau produksi, dan backend belum final.** Frontend/PWA belum ada, migrasi hardening tidak diterapkan oleh PR ini ke Supabase mana pun, audit NaN produksi untuk kolom baru belum dilakukan, gate hosted masih diblokir (lihat [Gate hosted](#gate-hosted-yang-masih-diblokir)), Supabase Storage belum diimplementasi (lihat [Storage](#storage-unggah-foto-belum-diimplementasi)), dan empat dari enam keputusan bisnis belum diputuskan (ongkir/radius dan pembatalan diputuskan pemilik 12 Nov 2026; lihat tabel di bawah). Backend lulus tes **secara lokal** (Postgres lokal dan tumpukan Supabase Auth/GoTrue + PostgREST nyata); itu bukan Supabase cloud, bukan staging, dan bukan kesiapan pilot.
 
 Legenda: [x] ada dan teruji lokal (Postgres lokal; bila disebut, juga GoTrue/PostgREST nyata), [~] ada tetapi tertutup/sementara/sebagian, [ ] belum ada atau belum terbukti.
 
@@ -11,7 +11,7 @@ Legenda: [x] ada dan teruji lokal (Postgres lokal; bila disebut, juga GoTrue/Pos
 - [x] Autentikasi: diverifikasi lokal dengan GoTrue v2.197.0 + PostgREST v16.5 nyata (signup, login, JWT, refresh rotation, logout, penolakan token palsu/kedaluwarsa); BUKAN Supabase cloud. Role awal `customer` walau metadata meminta admin; promosi role hanya lewat `provision_set_user_role`. Risiko: access token tetap valid sampai `exp` setelah logout.
 - [x] Katalog: RLS publik toko aktif dan produk tersedia; `list_stores`, `search_products` dengan pagination.
 - [ ] Keranjang: sepenuhnya sisi client (frontend belum ada).
-- [~] Checkout/pembuatan pesanan COD: `create_order` dengan idempotency key, harga dihitung server; alur COD dan konkurensi teruji lewat HTTP nyata lokal. Tertutup per toko sampai ongkir/radius/koordinat diisi (`store_delivery_not_configured`); nilai di tes sintetis, bukan keputusan bisnis.
+- [~] Checkout/pembuatan pesanan COD: `create_order` dengan idempotency key, harga dihitung server; alur COD dan konkurensi teruji lewat HTTP nyata lokal. Tertutup per toko sampai radius/koordinat diisi (`store_delivery_not_configured`); ongkir memakai rumus jarak (keputusan pemilik 12 Nov 2026, migrasi 20261112000001), `stores.delivery_fee` tidak lagi dipakai/diwajibkan saat checkout.
 - [x] Status penjual: accept/reject/preparing/ready_for_pickup oleh seller pemilik toko.
 - [~] Tugas/status driver: assignment hanya admin (fallback sementara); driver picked_up/delivered.
 - [x] Kontrol akses: RLS, grant kolom, blok tulis langsung, guard role/toko; matriks RLS empat peran + anon teruji via HTTP dengan JWT asli (lokal).
@@ -36,10 +36,10 @@ Semua kebijakan di bawah dikunci (fail closed) sampai operator mengaturnya lewat
 
 | # | Keputusan | Konfigurasi / kunci yang dibutuhkan | Keadaan saat ini |
 |---|---|---|---|
-| 1 | Wilayah pilot, rumus ongkir, radius, metode jarak | Per toko: `delivery_fee`, `service_radius_km`, koordinat toko via `admin_set_store_delivery_config`. Putuskan juga apakah tarif tetap cukup dan apakah Haversine garis lurus diterima | Tarif tetap per toko + Haversine (asumsi sementara); toko tanpa konfigurasi tidak bisa dipesan |
+| 1 | Wilayah pilot, rumus ongkir, radius, metode jarak | Per toko: `service_radius_km` (maks 5 km, constraint `stores_service_radius_max_5km`), koordinat toko via `admin_set_store_delivery_config`; ongkir dari rumus jarak (helper `delivery_fee_for_distance`, internal) | **SELESAI 12 Nov 2026 (migrasi 20261112000001):** ≤1.000 m → Rp2.000 flat; di atasnya Rp2.000 + `ceil((m−1.000)/100)×Rp200` (2.350 m → Rp4.800); radius maks 5 km; Haversine garis lurus; `stores.delivery_fee` dipertahankan tapi tidak lagi dipakai saat checkout |
 | 2 | Mekanisme assignment driver | Pilih: admin saja, penjual, atau driver self-claim (butuh RPC baru) | Hanya `assign_order_driver` oleh admin |
 | 3 | Verifikator transfer manual, bukti, rekening | Aktor verifikasi, format bukti (tabel/storage), info rekening, `manual_transfer_enabled`, plus pengembangan workflow | Ditolak; workflow belum ada |
-| 4 | Pembatalan dan refund | `cancellation_enabled=true`, `cancellation_allowed_statuses` (mis. `pending_seller,accepted`), aturan refund | Ditutup. `payment_status` tidak disentuh saat batal; refund belum ada |
+| 4 | Pembatalan dan refund | `cancellation_enabled=true`, `cancellation_allowed_statuses` (customer), `cancellation_allowed_statuses_seller` (seller), alasan wajib, aturan refund | **SELESAI 12 Nov 2026 (migrasi 20261112000000):** seed `cancellation_enabled='true'`, customer hanya dari `pending_seller`, seller dari `pending_seller,accepted,preparing`, admin dari status mana pun; `payment_status` tidak disentuh saat batal; refund belum ada |
 | 5 | Aktor `completed` | `completion_actor` = `customer` / `seller` / `driver` | Ditutup: tanpa baris kebijakan `completed` ditolak `completion_policy_not_configured` untuk semua peran termasuk admin |
 | 6 | Pencatatan COD | `cod_collection_recording_enabled=true`, `cod_collection_actor` = `driver` / `admin`; prosedur setoran/rekonsiliasi di luar sistem | Ditutup. `delivered`/`completed` tidak pernah menandai lunas; `record_cod_collection` menandai `verified` (arti COD: tunai diterima, bukan verifikasi transfer). Admin selalu boleh mencatat saat flag aktif, apa pun `cod_collection_actor` |
 

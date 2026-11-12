@@ -117,8 +117,8 @@ begin
   perform t.login('30000000-0000-0000-0000-00000000000a');
   perform t.expect_err('eskalasi: driver tidak bisa admin_get_policies', 'select * from public.admin_get_policies()', 'admin_role_required');
   perform t.login('40000000-0000-0000-0000-000000000001');
-  perform t.ok('admin: admin_get_policies mengembalikan default fail-closed',
-    (select value from public.admin_get_policies() where key = 'cancellation_enabled') = 'false'
+  perform t.ok('admin: admin_get_policies mengembalikan kebijakan saat ini (cancellation diaktifkan seed migrasi pembatalan per aktor; transfer/COD tetap fail-closed)',
+    (select value from public.admin_get_policies() where key = 'cancellation_enabled') = 'true'
     and (select value from public.admin_get_policies() where key = 'manual_transfer_enabled') = 'false'
     and (select value from public.admin_get_policies() where key = 'cod_collection_recording_enabled') = 'false');
   perform t.ok('audit log: admin melihat baris', (select count(*) from public.admin_audit_log) > 0);

@@ -35,8 +35,8 @@ test('create_order COD: harga/ongkir/total dihitung server, status pending_selle
   assert.deepEqual(Object.keys(order).sort(), ['delivery_fee', 'order_code', 'order_id', 'order_status', 'payment_method',
     'payment_status', 'subtotal', 'total'].sort());
   assert.equal(Number(order.subtotal), 25000, 'harga klien (price:1) diabaikan');
-  assert.equal(Number(order.delivery_fee), FIX.fee);
-  assert.equal(Number(order.total), 25000 + FIX.fee);
+  assert.equal(Number(order.delivery_fee), FIX.orderFee);
+  assert.equal(Number(order.total), 25000 + FIX.orderFee);
   assert.equal(order.order_status, 'pending_seller');
   assert.equal(order.payment_method, 'cod');
   assert.equal(order.payment_status, 'unpaid');
@@ -61,7 +61,7 @@ test('idempotency: kirim ulang key yang sama mengembalikan order yang sama; payl
 test('snapshot: perubahan harga produk setelah order tidak mengubah item/total order', async () => {
   expectOk(await rest('PATCH', `/products?id=eq.${w.pA1.id}`, { token: w.sellerA.token, body: { price: 99999 } }), 'ubah harga', [204]);
   assert.equal(sql(`select unit_price_snapshot from public.order_items where order_id='${order.order_id}' and product_id='${w.pA1.id}'`), '10000.00');
-  assert.equal(sql(`select total from public.orders where id='${order.order_id}'`), `${(25000 + FIX.fee).toFixed(2)}`);
+  assert.equal(sql(`select total from public.orders where id='${order.order_id}'`), `${(25000 + FIX.orderFee).toFixed(2)}`);
   expectOk(await rest('PATCH', `/products?id=eq.${w.pA1.id}`, { token: w.sellerA.token, body: { price: 10000 } }), 'kembalikan', [204]);
 });
 

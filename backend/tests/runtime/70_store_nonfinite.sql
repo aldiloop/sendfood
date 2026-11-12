@@ -26,15 +26,17 @@ BEGIN
     EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.order_items'::regclass AND conname='order_items_amounts_not_nan' AND convalidated));
   PERFORM t.expect_err('nonfinite: UPDATE stores.delivery_fee = NaN ditolak constraint',
     $q$update public.stores set delivery_fee = 'NaN' where id = '50000000-0000-0000-0000-00000000000a'$q$, 'stores_delivery_fee_not_nan');
-  PERFORM t.expect_err('nonfinite: UPDATE stores.service_radius_km = NaN ditolak constraint',
-    $q$update public.stores set service_radius_km = 'NaN' where id = '50000000-0000-0000-0000-00000000000a'$q$, 'stores_service_radius_not_nan');
+  PERFORM t.expect_err('nonfinite: UPDATE stores.service_radius_km = NaN ditolak constraint radius',
+    $q$update public.stores set service_radius_km = 'NaN' where id = '50000000-0000-0000-0000-00000000000a'$q$, 'stores_service_radius');
 END
 $$;
 
 -- B. Defense in depth create_order: baris legacy/bypass dengan fee NaN.
+-- Sejak migrasi 20261112000001 create_order TIDAK lagi membaca stores.delivery_fee
+-- (ongkir dari rumus jarak), jadi fee NaN tidak lagi bisa meracuni order.
 BEGIN;
 DO $$
-DECLARE o1 bigint; i1 bigint; h1 bigint;
+DECLARE o1 bigint; i1 bigint; h1 bigint; v_id uuid;
 BEGIN
   ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_delivery_fee_not_nan;
   ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_amounts_not_nan;
@@ -43,15 +45,17 @@ BEGIN
   SELECT count(*) INTO o1 FROM public.orders; SELECT count(*) INTO i1 FROM public.order_items;
   SELECT count(*) INTO h1 FROM public.order_status_history;
   PERFORM t.login('10000000-0000-0000-0000-00000000000a');
-  PERFORM t.expect_err('nonfinite: checkout pada toko dengan delivery_fee NaN ditolak (store_delivery_not_configured)',
-    t.co_sql('50000000-0000-0000-0000-00000000000a', '[{"product_id":"60000000-0000-0000-0000-0000000000a1","quantity":1}]'::jsonb,
-      '-6.21', '106.81', 'cod', 'nonfinite-fee-01'), 'store_delivery_not_configured');
+  SELECT order_id INTO v_id FROM public.create_order('50000000-0000-0000-0000-00000000000a',
+    '[{"product_id":"60000000-0000-0000-0000-0000000000a1","quantity":1}]'::jsonb,
+    'Jl. X', -6.21, 106.81, null, 'cod', 'nonfinite-fee-01');
   PERFORM t.logout();
+  PERFORM t.ok('nonfinite: checkout pada toko dengan delivery_fee NaN tetap sukses (fee tidak dibaca, ongkir rumus 3200)',
+    (SELECT delivery_fee FROM public.orders WHERE id = v_id) = 3200);
   PERFORM t.ok('nonfinite: tidak ada order dengan total NaN',
     NOT EXISTS (SELECT 1 FROM public.orders WHERE total = 'NaN' OR delivery_fee = 'NaN' OR subtotal = 'NaN'));
-  PERFORM t.ok('nonfinite: fee NaN -> jumlah orders/order_items/history tidak berubah',
-    (SELECT count(*) FROM public.orders) = o1 AND (SELECT count(*) FROM public.order_items) = i1
-    AND (SELECT count(*) FROM public.order_status_history) = h1);
+  PERFORM t.ok('nonfinite: fee NaN -> satu order + item + riwayat baru dibuat',
+    (SELECT count(*) FROM public.orders) = o1 + 1 AND (SELECT count(*) FROM public.order_items) = i1 + 1
+    AND (SELECT count(*) FROM public.order_status_history) = h1 + 1);
 END
 $$;
 ROLLBACK;
@@ -62,6 +66,7 @@ DO $$
 DECLARE o1 bigint;
 BEGIN
   ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_service_radius_not_nan;
+  ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_service_radius_max_5km;
   UPDATE public.stores SET service_radius_km = 'NaN' WHERE id = '50000000-0000-0000-0000-00000000000a';
   SELECT count(*) INTO o1 FROM public.orders;
   PERFORM t.login('10000000-0000-0000-0000-00000000000a');
@@ -83,6 +88,7 @@ BEGIN;
 DO $$
 BEGIN
   ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_service_radius_not_nan;
+  ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_service_radius_max_5km;
   UPDATE public.stores SET service_radius_km = 'NaN' WHERE id = '50000000-0000-0000-0000-00000000000a';
   PERFORM t.ok('nonfinite: list_stores tidak mengklaim within_service_radius=true untuk radius NaN',
     (SELECT within_service_radius IS DISTINCT FROM true FROM public.list_stores(null, -6.5, 107.2, 'nearest', 50, 0)
@@ -99,5 +105,8 @@ BEGIN
   PERFORM t.ok('nonfinite: constraint stores pulih setelah rollback',
     (SELECT count(*) FROM pg_constraint WHERE conrelid='public.stores'::regclass
       AND conname IN ('stores_delivery_fee_not_nan','stores_service_radius_not_nan')) = 2);
+  PERFORM t.ok('nonfinite: constraint stores_service_radius_max_5km pulih setelah rollback',
+    EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.stores'::regclass
+      AND conname='stores_service_radius_max_5km' AND convalidated));
 END
 $$;

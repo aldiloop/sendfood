@@ -101,7 +101,7 @@ begin
   select * into r from public.create_order(sA,
     jsonb_build_array(jsonb_build_object('product_id', pA1, 'quantity', 1, 'price', 1, 'unit_price', 1, 'line_total', 1, 'name', 'gratis')),
     'Jl. X', -6.21, 106.81, null, 'cod', 'tamper-0001');
-  perform t.ok('tampering: harga/nama di payload diabaikan (subtotal 10000, total 15000)', r.subtotal = 10000 and r.total = 15000);
+  perform t.ok('tampering: harga/nama di payload diabaikan (subtotal 10000, total 13200)', r.subtotal = 10000 and r.total = 13200);
   perform t.ok('tampering: snapshot memakai nama & harga DB',
     exists (select 1 from public.order_items where order_id = r.order_id and product_name_snapshot = 'Nasi Goreng A' and unit_price_snapshot = 10000 and line_total = 10000));
   perform t.logout();
@@ -191,7 +191,7 @@ begin
   perform t.login('10000000-0000-0000-0000-00000000000a');
   select order_id into v_c from public.create_order('50000000-0000-0000-0000-00000000000a', '[{"product_id":"60000000-0000-0000-0000-0000000000a2","quantity":1}]', 'Jl. X', -6.21, 106.81, null, 'cod', 'shared-key-01');
   perform t.ok('idempotensi: retry setelah harga berubah mengembalikan order lama (harga lama)',
-    v_c = v_a and (select total from public.orders where id = v_c) = 9000);
+    v_c = v_a and (select total from public.orders where id = v_c) = 7200);
   -- Tanpa kunci, dua checkout identik membuat dua order (perilaku terdokumentasi).
   select order_id into v_c from public.create_order('50000000-0000-0000-0000-00000000000a', '[{"product_id":"60000000-0000-0000-0000-0000000000a1","quantity":1}]', 'Jl. X', -6.21, 106.81);
   select order_id into v_d from public.create_order('50000000-0000-0000-0000-00000000000a', '[{"product_id":"60000000-0000-0000-0000-0000000000a1","quantity":1}]', 'Jl. X', -6.21, 106.81);
